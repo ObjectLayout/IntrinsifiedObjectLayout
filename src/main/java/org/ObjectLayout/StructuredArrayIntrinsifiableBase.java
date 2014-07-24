@@ -225,6 +225,11 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      */
     T get(final long index)
             throws IllegalArgumentException {
+
+//        long offset = getBodySize() + (index * getDim0ElementSize());
+//        return (T) deriveObjectAtOffset(this, offset);
+
+
         if (index < Integer.MAX_VALUE) {
             return get((int) index);
         }
@@ -735,5 +740,19 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     long getInstanceSize(Class instanceClass) {
         // return unsafe.getInstanceSize(instanceClass);
         return 0;
+    }
+
+    Object allocateHeapForClass(Class instanceClass, long size) {
+        // return unsafe.allocateHeapForClass(instanceClass, size);
+        return null;
+    }
+
+    Object deriveObjectAtOffset(Object o, long offset) {
+        // return unsafe.deriveObjectAtOffset(o, offset);
+        return null;
+    }
+
+    void constructObjectAtOffset(Object containingObject, long offset, Constructor c, Object... args) {
+        // unsafe.constructObjectAtOffset(containingObject, offset, c, args)
     }
  }
