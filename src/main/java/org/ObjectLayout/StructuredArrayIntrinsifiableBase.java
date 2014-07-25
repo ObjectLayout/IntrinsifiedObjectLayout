@@ -118,27 +118,34 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     public String toString() {
         final StringBuilder lengthsString = new StringBuilder("[");
         final StringBuilder elementSizesString = new StringBuilder("[");
+        final StringBuilder paddingSizesString = new StringBuilder("[");
 
         lengthsString.append(getDim0Length());
         elementSizesString.append(getDim0ElementSize());
+        paddingSizesString.append(getDim0PaddingSize());
         if (getDimensionCount() > 1) {
             lengthsString.append(", ").append(getDim1Length());
             elementSizesString.append(", ").append(getDim1ElementSize());
+            paddingSizesString.append(", ").append(getDim1PaddingSize());
         }
         if (getDimensionCount() > 2) {
             lengthsString.append(", ").append(getDim2Length());
             elementSizesString.append(", ").append(getDim2ElementSize());
+            paddingSizesString.append(", ").append(getDim2PaddingSize());
         }
         for (int i = 3; i < getDimensionCount(); i++) {
             lengthsString.append(", ").append(getLengths()[i]);
             elementSizesString.append(", ").append(getElementSizes()[i]);
+            paddingSizesString.append(", ").append(getPaddingSizes()[i]);
         }
         lengthsString.append("]");
         elementSizesString.append("]");
 
         final StringBuilder output = new StringBuilder("StructuredArrayIntrinsifiableBase<");
         output.append(getElementClass()).append(">").append(lengthsString);
-        output.append(": sizes = ").append(elementSizesString).append("bodySize = ").append(getBodySize());
+        output.append(": sizes = ").append(elementSizesString).
+                append(", paddings = ").append(paddingSizesString).
+                append(", bodySize = ").append(getBodySize());
 
         return new String(output);
     }
