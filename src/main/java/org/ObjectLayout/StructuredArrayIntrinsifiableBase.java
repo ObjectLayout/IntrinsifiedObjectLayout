@@ -20,6 +20,8 @@ import java.lang.reflect.InvocationTargetException;
  */
 abstract class StructuredArrayIntrinsifiableBase<T> {
 
+    // the existence of this field (not it's value) indicates that the class should be intrinsified:
+    // (This allows the JVM to make this determination at load time, and not wait for initialization)
     static final boolean existenceIndicatesIntrinsic = true;
 
     //
@@ -64,7 +66,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         setBodySize((int) getInstanceSize(this.getClass()));
         setDimensionCount(dimensionCount);
 
-        // Populate cached lengths and elementh size values:
+        // Populate cached lengths and element size values:
         setDim0Length(lengths[0]);
         setDim0ElementSize(elementSizes[0]);
         if (dimensionCount > 1) {
@@ -84,12 +86,6 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         setElementSizes(elementSizes);
 
         setElementClass(elementClass);
-
-//        this.dimensionCount = dimensionCount;
-//        this.lengths = lengths;
-//        this.length = lengths[0];
-//
-//        this.elementClass = ctorAndArgsProvider.getElementClass();
 
         allocateInternalStorage(dimensionCount, getLength());
     }
@@ -227,7 +223,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             throws IllegalArgumentException {
 
 //        long offset = getBodySize() + (index * getDim0ElementSize());
-//        return (T) deriveObjectAtOffset(this, offset);
+//        return (T) deriveContainedObjectAtOffset(this, offset);
 
 
         if (index < Integer.MAX_VALUE) {
@@ -502,7 +498,8 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     private final long elementSizesOffset    = offset += 8;
     private final long elementClassOffset    = offset += 8;
 
-    // These are our hidden fields
+    // These are our hidden fields: They are only supported via offsets and unsafe:
+
 //    private int bodySize;
 //    private int dimensionCount;
 //    private long dim0Length;
@@ -517,6 +514,8 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
 //    private long[] elementSizes;
 //    private Class<T> elementClass;
 
+
+    //  Removed private java fields and getters (from original vanilla version):
 
 //    private final int dimensionCount;
 //
@@ -747,8 +746,8 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return null;
     }
 
-    Object deriveObjectAtOffset(Object o, long offset) {
-        // return unsafe.deriveObjectAtOffset(o, offset);
+    Object deriveContainedObjectAtOffset(Object o, long offset) {
+        // return unsafe.deriveContainedObjectAtOffset(o, offset);
         return null;
     }
 
