@@ -59,13 +59,11 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         }
 
         // Calculate and populate elementSizes:
-        // TODO: Take page padding into account in elementSize calculation:
-        // TODO: Need to formalize api support needed for figuring elementSize (with padding) at each dimension
         final long[] elementSizes = new long[dimensionCount];
         elementSizes[dimensionCount - 1] = getInstanceSizeWhenContained(elementClass);
         for (int dim = dimensionCount - 2; dim >= 0; dim--) {
-            long thisDimArrayBodySize = lengths[dim] * elementSizes[dim + 1];
-            elementSizes[dim] = thisDimArrayBodySize + getInstanceSizeWhenContained(this.getClass());
+            elementSizes[dim] =
+                    getContainingObjectFootprintWhenContained(this.getClass(), elementSizes[dim + 1], lengths[dim]);
         }
 
         // initialize hidden fields:
@@ -84,6 +82,8 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             initDim1Length(lengths[2]);
             initDim1ElementSize(elementSizes[2]);
         }
+
+        initContainedOffset(getInstanceSizeWhenContained(elementClass) - getInstanceSize(elementClass));
 
         initLengths(lengths);
         initElementSizes(elementSizes);
@@ -156,11 +156,18 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         constructorMagic.setArrayConstructionArgs(new ArrayConstructionArgs(
                 arrayCtorAndArgs, ctorAndArgsProvider, lengths, null));
         constructorMagic.setActive(true);
+
+        // Calculate array size in the heap:
+        final Class arrayClass = arrayCtorAndArgs.getConstructor().getDeclaringClass();
+        long elementSize = getInstanceSizeWhenContained(ctorAndArgsProvider.getElementClass());
+        for (int dimIndex = lengths.length - 2; dimIndex >= 0; dimIndex--) {
+            elementSize = getContainingObjectFootprintWhenContained(arrayClass, elementSize, lengths[dimIndex]);
+        }
+        long size = getContainingObjectFootprint(arrayClass, elementSize, lengths[0]);
+
         try {
             Constructor<S> arrayConstructor = arrayCtorAndArgs.getConstructor();
             arrayConstructor.setAccessible(true);
-            // TODO: calculate size needed for array.
-            // TODO: need to formalize api support needed for figuring out size to allocate.
             // TODO: use allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate room for array
             // TODO: replace constructor.newInstance() call with constructObjectAtOffset() call:
             return arrayConstructor.newInstance(arrayCtorAndArgs.getArgs());
@@ -264,8 +271,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      */
     T get(final long index)
             throws IllegalArgumentException {
-
-//        long offset = getBodySize() + (index * getDim0ElementSize());
+//        long offset = getBodySize() + getContainedOffset() + (index * getDim0ElementSize());
 //        return (T) deriveContainedObjectAtOffset(this, offset);
 
 
@@ -501,6 +507,17 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         unsafe.putLong(this, dim2ElementSizeOffset, dim2ElementSize);
     }
 
+    private long getContainedOffset() {
+        return unsafe.getLong(this, containedOffsetOffset);
+    }
+
+    private void initContainedOffset(long containedOffset) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
+        unsafe.putLong(this, containedOffsetOffset, containedOffset);
+    }
+
     long[] getLengths() {
         return (long[]) unsafe.getObject(this, lengthsOffset);
     }
@@ -552,7 +569,8 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     private final long dim1ElementSizeOffset = offset += 8;
     private final long dim2LengthOffset      = offset += 8;
     private final long dim2ElementSizeOffset = offset += 8;
-    private final long lengthsOffset         = offset += 24;
+    private final long containedOffsetOffset = offset += 8;
+    private final long lengthsOffset         = offset += 16;
     private final long elementSizesOffset    = offset += 8;
     private final long elementClassOffset    = offset += 8;
 
@@ -789,15 +807,28 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         }
     }
 
-    long getInstanceSizeWhenContained(Class instanceClass) {
+    static long getInstanceSizeWhenContained(Class instanceClass) {
         // TODO: implement with something like:
         // return unsafe.getInstanceSizeWhenContained(instanceClass);
         return 0;
     }
 
-    long getInstanceSize(Class instanceClass) {
+    static long getInstanceSize(Class instanceClass) {
+        // TODO: implement with something like:
         // return unsafe.getInstanceSize(instanceClass);
         return 0;
+    }
+
+    static long getContainingObjectFootprintWhenContained(Class containerClass, long containedElementSize, long numberOfElements) {
+        // TODO: implement with something like:
+        // return unsafe.getContainingObjectFootprintWhenContained(this.getClass(), containedElementSize, numberOfElements);
+        return getInstanceSizeWhenContained(containerClass) + (numberOfElements * containedElementSize);
+    }
+
+    static long getContainingObjectFootprint(Class containerClass, long containedElementSize, long numberOfElements) {
+        // TODO: implement with something like:
+        // return unsafe.getStructuredArrayFootPrint(this.getClass(), containedElementSize, numberOfElements);
+        return getInstanceSize(containerClass) + (numberOfElements * containedElementSize);
     }
 
     Object allocateHeapForClass(Class instanceClass, long size) {
