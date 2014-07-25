@@ -24,6 +24,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     // (This allows the JVM to make this determination at load time, and not wait for initialization)
     static final boolean existenceIndicatesIntrinsic = true;
 
+    // Track initialization state:
+    boolean isInitialized = false;
+    public volatile boolean constructionCompleted = false;
+
     //
     //
     // Constructor:
@@ -54,8 +58,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             throw new IllegalArgumentException("length cannot be negative");
         }
 
-        // Calculate and populate ElementSizes:
-        // TODO: Take page padding into account
+        // Calculate and populate elementSizes:
+        // TODO: Take page padding into account in elementSize calculation:
+        // TODO: Need to formalize api support needed for figuring elementSize (with padding) at each dimension
         final long[] elementSizes = new long[dimensionCount];
         elementSizes[dimensionCount - 1] = getInstanceSizeWhenContained(elementClass);
         for (int dim = dimensionCount - 2; dim >= 0; dim--) {
@@ -63,36 +68,67 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             elementSizes[dim] = thisDimArrayBodySize + getInstanceSizeWhenContained(this.getClass());
         }
 
-        setBodySize((int) getInstanceSize(this.getClass()));
-        setDimensionCount(dimensionCount);
+        // initialize hidden fields:
+        initBodySize((int) getInstanceSize(this.getClass()));
+        initDimensionCount(dimensionCount);
 
-        // Populate cached lengths and element size values:
-        setDim0Length(lengths[0]);
-        setDim0ElementSize(elementSizes[0]);
+        initDim0Length(lengths[0]);
+        initDim0ElementSize(elementSizes[0]);
+
         if (dimensionCount > 1) {
-            setDim1Length(lengths[1]);
-            setDim1ElementSize(elementSizes[1]);
+            initDim1Length(lengths[1]);
+            initDim1ElementSize(elementSizes[1]);
         }
+
         if (dimensionCount > 2) {
-            setDim1Length(lengths[2]);
-            setDim1ElementSize(elementSizes[2]);
-        }
-        if (dimensionCount > 3) {
-            setDim1Length(lengths[3]);
-            setDim1ElementSize(elementSizes[3]);
+            initDim1Length(lengths[2]);
+            initDim1ElementSize(elementSizes[2]);
         }
 
-        setLengths(lengths);
-        setElementSizes(elementSizes);
+        initLengths(lengths);
+        initElementSizes(elementSizes);
 
-        setElementClass(elementClass);
+        initElementClass(elementClass);
 
+        // TODO: replace "vanilla" internal storage with flat representation:
         allocateInternalStorage(dimensionCount, getLength());
+
+        // Indicate construction is complete, such that further calls to initX() initializers of
+        // hidden fields will fail from this point on.
+        isInitialized = true;
+
+        // follow update of internal boolean indication with a modification of a public volatile
+        // to ensure ordering:
+        constructionCompleted = true;
     }
 
     @Override
     public String toString() {
-        return "Hey!";
+        final StringBuilder lengthsString = new StringBuilder("[");
+        final StringBuilder elementSizesString = new StringBuilder("[");
+
+        lengthsString.append(getDim0Length());
+        elementSizesString.append(getDim0ElementSize());
+        if (getDimensionCount() > 1) {
+            lengthsString.append(", ").append(getDim1Length());
+            elementSizesString.append(", ").append(getDim1ElementSize());
+        }
+        if (getDimensionCount() > 2) {
+            lengthsString.append(", ").append(getDim2Length());
+            elementSizesString.append(", ").append(getDim2ElementSize());
+        }
+        for (int i = 3; i < getDimensionCount(); i++) {
+            lengthsString.append(", ").append(getLengths()[i]);
+            elementSizesString.append(", ").append(getElementSizes()[i]);
+        }
+        lengthsString.append("]");
+        elementSizesString.append("]");
+
+        final StringBuilder output = new StringBuilder("StructuredArrayIntrinsifiableBase<");
+        output.append(getElementClass()).append(">").append(lengthsString);
+        output.append(": sizes = ").append(elementSizesString).append("bodySize = ").append(getBodySize());
+
+        return new String(output);
     }
 
     /**
@@ -123,6 +159,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         try {
             Constructor<S> arrayConstructor = arrayCtorAndArgs.getConstructor();
             arrayConstructor.setAccessible(true);
+            // TODO: calculate size needed for array.
+            // TODO: need to formalize api support needed for figuring out size to allocate.
+            // TODO: use allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate room for array
+            // TODO: replace constructor.newInstance() call with constructObjectAtOffset() call:
             return arrayConstructor.newInstance(arrayCtorAndArgs.getArgs());
 
         } catch (InstantiationException ex) {
@@ -144,7 +184,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * construction-in-place call on a previously allocated memory location associated with the given index.
      */
     void constructElementAtIndex(final long index0, final Constructor<T> constructor, Object... args)
-            throws InstantiationException, IllegalAccessException, InvocationTargetException {
+            throws InstantiationException, IllegalAccessException, InvocationTargetException
+    {
+        // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
         T element = constructor.newInstance(args);
         storeElementInLocalStorageAtIndex(element, index0);
     }
@@ -160,6 +202,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
                                   ArrayConstructionArgs arrayConstructionArgs)
             throws InstantiationException, IllegalAccessException, InvocationTargetException {
         getConstructorMagic().setArrayConstructionArgs(arrayConstructionArgs);
+        // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
         StructuredArray<T> subArray = constructor.newInstance();
         storeSubArrayInLocalStorageAtIndex(subArray, index0);
     }
@@ -374,7 +417,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return unsafe.getInt(this, bodySizeOffset);
     }
 
-    private void setBodySize(int bodySize) {
+    private void initBodySize(int bodySize) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putInt(this, bodySizeOffset, bodySize);
     }
 
@@ -382,7 +428,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return unsafe.getInt(this, dimensionCountOffset);
     }
 
-    private void setDimensionCount(int dimensionCount) {
+    private void initDimensionCount(int dimensionCount) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putInt(this, dimensionCountOffset, dimensionCount);
     }
 
@@ -390,7 +439,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return unsafe.getLong(this, dim0LengthOffset);
     }
 
-    private void setDim0Length(long dim0Length) {
+    private void initDim0Length(long dim0Length) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putLong(this, dim0LengthOffset, dim0Length);
     }
 
@@ -398,7 +450,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return unsafe.getLong(this, dim1LengthOffset);
     }
 
-    private void setDim1Length(long dim1Length) {
+    private void initDim1Length(long dim1Length) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putLong(this, dim1LengthOffset, dim1Length);
     }
 
@@ -406,23 +461,21 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return unsafe.getLong(this, dim2LengthOffset);
     }
 
-    private void setDim2Length(long dim2Length) {
+    private void initDim2Length(long dim2Length) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putLong(this, dim2LengthOffset, dim2Length);
-    }
-
-    private long getDim3Length() {
-        return unsafe.getLong(this, dim3LengthOffset);
-    }
-
-    private void setDim3Length(long dim3Length) {
-        unsafe.putLong(this, dim3LengthOffset, dim3Length);
     }
 
     private long getDim0ElementSize() {
         return unsafe.getLong(this, dim0ElementSizeOffset);
     }
 
-    private void setDim0ElementSize(long dim0ElementSize) {
+    private void initDim0ElementSize(long dim0ElementSize) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putLong(this, dim0ElementSizeOffset, dim0ElementSize);
     }
 
@@ -430,7 +483,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return unsafe.getLong(this, dim1ElementSizeOffset);
     }
 
-    private void setDim1ElementSize(long dim1ElementSize) {
+    private void initDim1ElementSize(long dim1ElementSize) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putLong(this, dim1ElementSizeOffset, dim1ElementSize);
     }
 
@@ -438,23 +494,21 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return unsafe.getLong(this, dim2ElementSizeOffset);
     }
 
-    private void setDim2ElementSize(long dim2ElementSize) {
+    private void initDim2ElementSize(long dim2ElementSize) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putLong(this, dim2ElementSizeOffset, dim2ElementSize);
-    }
-
-    private long getDim3ElementSize() {
-        return unsafe.getLong(this, dim3ElementSizeOffset);
-    }
-
-    private void setDim3ElementSize(long dim3ElementSize) {
-        unsafe.putLong(this, dim3ElementSizeOffset, dim3ElementSize);
     }
 
     long[] getLengths() {
         return (long[]) unsafe.getObject(this, lengthsOffset);
     }
 
-    private void setLengths(long[] lengths) {
+    private void initLengths(long[] lengths) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putObject(this, lengthsOffset, lengths);
     }
 
@@ -462,7 +516,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return (long[]) unsafe.getObject(this, elementSizesOffset);
     }
 
-    private void setElementSizes(long[] elementSizes) {
+    private void initElementSizes(long[] elementSizes) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putObject(this, elementSizesOffset, elementSizes);
     }
 
@@ -471,7 +528,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return (Class<T>) unsafe.getObject(this, elementClassOffset);
     }
 
-    private void setElementClass(Class<T> elementClass) {
+    private void initElementClass(Class<T> elementClass) {
+        if (isInitialized) {
+            throw new IllegalArgumentException("cannot change value after construction");
+        }
         unsafe.putObject(this, elementClassOffset, elementClass);
     }
 
@@ -492,9 +552,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     private final long dim1ElementSizeOffset = offset += 8;
     private final long dim2LengthOffset      = offset += 8;
     private final long dim2ElementSizeOffset = offset += 8;
-    private final long dim3LengthOffset      = offset += 8;
-    private final long dim3ElementSizeOffset = offset += 8;
-    private final long lengthsOffset         = offset += 8;
+    private final long lengthsOffset         = offset += 24;
     private final long elementSizesOffset    = offset += 8;
     private final long elementClassOffset    = offset += 8;
 
@@ -732,6 +790,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     }
 
     long getInstanceSizeWhenContained(Class instanceClass) {
+        // TODO: implement with something like:
         // return unsafe.getInstanceSizeWhenContained(instanceClass);
         return 0;
     }
@@ -742,16 +801,19 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     }
 
     Object allocateHeapForClass(Class instanceClass, long size) {
+        // TODO: implement with something like:
         // return unsafe.allocateHeapForClass(instanceClass, size);
         return null;
     }
 
     Object deriveContainedObjectAtOffset(Object o, long offset) {
+        // TODO: implement with something like:
         // return unsafe.deriveContainedObjectAtOffset(o, offset);
         return null;
     }
 
     void constructObjectAtOffset(Object containingObject, long offset, Constructor c, Object... args) {
+        // TODO: implement with something like:
         // unsafe.constructObjectAtOffset(containingObject, offset, c, args)
     }
  }
