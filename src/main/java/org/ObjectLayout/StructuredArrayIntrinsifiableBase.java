@@ -140,9 +140,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         }
         lengthsString.append("]");
         elementSizesString.append("]");
+        paddingSizesString.append("]");
 
         final StringBuilder output = new StringBuilder("StructuredArrayIntrinsifiableBase<");
-        output.append(getElementClass()).append(">").append(lengthsString);
+        output.append(getElementClass().getName()).append(">").append(lengthsString);
         output.append(": sizes = ").append(elementSizesString).
                 append(", paddings = ").append(paddingSizesString).
                 append(", bodySize = ").append(getBodySize());
