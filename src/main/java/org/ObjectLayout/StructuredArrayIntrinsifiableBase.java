@@ -929,19 +929,19 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return 0;
     }
 
-    Object allocateHeapForClass(Class instanceClass, long size) {
+    static Object allocateHeapForClass(Class instanceClass, long size) {
         // TODO: implement with something like:
         // return unsafe.allocateHeapForClass(instanceClass, size);
         return null;
     }
 
-    Object deriveContainedObjectAtOffset(Object o, long offset) {
+    static Object deriveContainedObjectAtOffset(Object o, long offset) {
         // TODO: implement with something like:
         // return unsafe.deriveContainedObjectAtOffset(o, offset);
         return null;
     }
 
-    void constructObjectAtOffset(Object containingObject, long offset, Constructor c, Object... args) {
+    static void constructObjectAtOffset(Object containingObject, long offset, Constructor c, Object... args) {
         // TODO: implement with something like:
         // unsafe.constructObjectAtOffset(containingObject, offset, c, args)
     }
