@@ -246,6 +246,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         if (getDimensionCount() != 1) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
         }
+        if ((index < 0) || (index > getDim0Length())) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
+
         // TODO replace with direct access logic, along the lines of:
         // long offset = getBodySize() + (getDim0PaddingSize() + (index * getDim0ElementSize()));
         // return (T) deriveContainedObjectAtOffset(this, offset);
@@ -264,6 +268,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             throws IllegalArgumentException {
         if (getDimensionCount() != 2) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
+        }
+        if ((index0 < 0) || (index0 > getDim0Length()) ||
+                (index1 < 0) || (index1 > getDim1Length())) {
+            throw new ArrayIndexOutOfBoundsException();
         }
         // TODO replace with direct access logic, along the lines of:
         // long offset = getBodySize() +
@@ -286,6 +294,11 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         if (getDimensionCount() != 3) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
         }
+        if ((index0 < 0) || (index0 > getDim0Length()) ||
+                (index1 < 0) || (index1 > getDim1Length()) ||
+                (index2 < 0) || (index2 > getDim2Length())) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
         // TODO replace with direct access logic, along the lines of:
         // long offset = getBodySize() +
         //      (getDim0PaddingSize() + (index0 * getDim0ElementSize())) +
@@ -307,6 +320,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         if (getDimensionCount() != 1) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
         }
+        if ((index < 0) || (index > getDim0Length())) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
+
         // TODO replace with direct access logic, along the lines of:
         // long offset = getBodySize() + (getDim0PaddingSize() + (index * getDim0ElementSize()));
         // return (T) deriveContainedObjectAtOffset(this, offset);
@@ -335,6 +352,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         if (getDimensionCount() != 2) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
         }
+        if ((index0 < 0) || (index0 > getDim0Length()) ||
+                (index1 < 0) || (index1 > getDim1Length())) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
 
         // TODO replace with direct access logic, along the lines of:
         // long offset = getBodySize() +
@@ -356,6 +377,11 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             throws IllegalArgumentException {
         if (getDimensionCount() != 3) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
+        }
+        if ((index0 < 0) || (index0 > getDim0Length()) ||
+                (index1 < 0) || (index1 > getDim1Length()) ||
+                (index2 < 0) || (index2 > getDim2Length())) {
+            throw new ArrayIndexOutOfBoundsException();
         }
 
         // TODO replace with direct access logic, along the lines of:
@@ -430,6 +456,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         if (getDimensionCount() < 2) {
             throw new IllegalArgumentException("cannot call getSubArrayL() on single dimensional array");
         }
+        if ((index < 0) || (index > getDim0Length())) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
 
         // TODO replace with direct access logic, along the lines of:
         // long offset = getBodySize() + (getDim0PaddingSize() + (index * getDim0ElementSize()));
@@ -458,6 +487,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     StructuredArray<T> getSubArray(final int index) throws IllegalArgumentException {
         if (getDimensionCount() < 2) {
             throw new IllegalArgumentException("cannot call getSubArray() on single dimensional array");
+        }
+        if ((index < 0) || (index > getDim0Length())) {
+            throw new ArrayIndexOutOfBoundsException();
         }
 
         // TODO replace with direct access logic, along the lines of:
@@ -664,23 +696,24 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     private static final long paddingSizesOffset    = offset += 8;
     private static final long elementClassOffset    = offset += 8;
 
-    // These are our hidden fields: They are only supported via offsets and unsafe:
+    // These are our hidden fields, supported by the JVM's special handling of this
+    // class: They are only accessible via offsets and unsafe:
 
-//    private int bodySize;
-//    private int dimensionCount;
-//    private long dim0Length;
-//    private long dim0ElementSize;
-//    private long dim0PaddingSize;
-//    private long dim1Length;
-//    private long dim1ElementSize;
-//    private long dim1PaddingSize;
-//    private long dim2Length;
-//    private long dim2ElementSize;
-//    private long dim2PaddingSize;
-//    private long[] lengths;
-//    private long[] elementSizes;
-//    private long[] paddingSizes;
-//    private Class<T> elementClass;
+    //    private int bodySize;
+    //    private int dimensionCount;
+    //    private long dim0Length;
+    //    private long dim0ElementSize;
+    //    private long dim0PaddingSize;
+    //    private long dim1Length;
+    //    private long dim1ElementSize;
+    //    private long dim1PaddingSize;
+    //    private long dim2Length;
+    //    private long dim2ElementSize;
+    //    private long dim2PaddingSize;
+    //    private long[] lengths;
+    //    private long[] elementSizes;
+    //    private long[] paddingSizes;
+    //    private Class<T> elementClass;
 
 
     //  Removed private java fields and getters (from original vanilla version):
