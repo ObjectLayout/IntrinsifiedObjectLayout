@@ -22,10 +22,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
 
     // the existence of this field (not it's value) indicates that the class should be intrinsified:
     // (This allows the JVM to make this determination at load time, and not wait for initialization)
-    static final boolean existenceIndicatesIntrinsic = true;
+    private static final boolean existenceIndicatesIntrinsic = true;
 
     // Track initialization state:
-    boolean isInitialized = false;
+    private boolean isInitialized = false;
     public volatile boolean constructionCompleted = false;
 
     //
@@ -648,21 +648,21 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
       */
 
     private static int offset = 0;
-    private final long bodySizeOffset        = offset += 8;
-    private final long dimensionCountOffset  = offset += 8;
-    private final long dim0LengthOffset      = offset += 8;
-    private final long dim0ElementSizeOffset = offset += 8;
-    private final long dim0PaddingSizeOffset = offset += 8;
-    private final long dim1LengthOffset      = offset += 8;
-    private final long dim1ElementSizeOffset = offset += 8;
-    private final long dim1PaddingSizeOffset = offset += 8;
-    private final long dim2LengthOffset      = offset += 8;
-    private final long dim2ElementSizeOffset = offset += 8;
-    private final long dim2PaddingSizeOffset = offset += 8;
-    private final long lengthsOffset         = offset += 8;
-    private final long elementSizesOffset    = offset += 8;
-    private final long paddingSizesOffset    = offset += 8;
-    private final long elementClassOffset    = offset += 8;
+    private static final long bodySizeOffset        = offset += 8;
+    private static final long dimensionCountOffset  = offset += 8;
+    private static final long dim0LengthOffset      = offset += 8;
+    private static final long dim0ElementSizeOffset = offset += 8;
+    private static final long dim0PaddingSizeOffset = offset += 8;
+    private static final long dim1LengthOffset      = offset += 8;
+    private static final long dim1ElementSizeOffset = offset += 8;
+    private static final long dim1PaddingSizeOffset = offset += 8;
+    private static final long dim2LengthOffset      = offset += 8;
+    private static final long dim2ElementSizeOffset = offset += 8;
+    private static final long dim2PaddingSizeOffset = offset += 8;
+    private static final long lengthsOffset         = offset += 8;
+    private static final long elementSizesOffset    = offset += 8;
+    private static final long paddingSizesOffset    = offset += 8;
+    private static final long elementClassOffset    = offset += 8;
 
     // These are our hidden fields: They are only supported via offsets and unsafe:
 
