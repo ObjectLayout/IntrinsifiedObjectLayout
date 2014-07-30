@@ -50,6 +50,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         final int dimensionCount = lengths.length;
         final Class<T> elementClass = ctorAndArgsProvider.getElementClass();
 
+        // Finish consuming constructMagic arguments:
+        constructorMagic.setActive(false);
+
         if (dimensionCount < 1) {
             throw new IllegalArgumentException("dimensionCount must be at least 1");
         }
@@ -173,9 +176,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         // Class<T> elementClass = ctorAndArgsProvider.getElementClass();
 
         ConstructorMagic constructorMagic = getConstructorMagic();
-        constructorMagic.setArrayConstructionArgs(new ArrayConstructionArgs(
-                arrayCtorAndArgs, ctorAndArgsProvider, lengths, null));
-        constructorMagic.setActive(true);
+        constructorMagic.setConstructionArgs(ctorAndArgsProvider, lengths);
 
         // Calculate array size in the heap:
         final Class arrayClass = arrayCtorAndArgs.getConstructor().getDeclaringClass();
@@ -186,6 +187,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         long size = getContainingObjectFootprint(arrayClass, elementSize, lengths[0]);
 
         try {
+            constructorMagic.setActive(true);
             Constructor<S> arrayConstructor = arrayCtorAndArgs.getConstructor();
             arrayConstructor.setAccessible(true);
             // TODO: use allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate room for array
@@ -228,10 +230,17 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     void constructSubArrayAtIndex(long index0, final Constructor<StructuredArray<T>> constructor,
                                   ArrayConstructionArgs arrayConstructionArgs)
             throws InstantiationException, IllegalAccessException, InvocationTargetException {
-        getConstructorMagic().setArrayConstructionArgs(arrayConstructionArgs);
-        // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
-        StructuredArray<T> subArray = constructor.newInstance();
-        storeSubArrayInLocalStorageAtIndex(subArray, index0);
+        ConstructorMagic constructorMagic = getConstructorMagic();
+        constructorMagic.setConstructionArgs(
+                arrayConstructionArgs.ctorAndArgsProvider, arrayConstructionArgs.lengths);
+        try {
+            constructorMagic.setActive(true);
+            // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
+            StructuredArray<T> subArray = constructor.newInstance();
+            storeSubArrayInLocalStorageAtIndex(subArray, index0);
+        } finally {
+            constructorMagic.setActive(false);
+        }
     }
 
     /**
@@ -859,15 +868,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             this.active = active;
         }
 
-        public void setArrayConstructionArgs(ArrayConstructionArgs arrayConstructorArgs) {
-            this.arrayCtorAndArgs = arrayConstructorArgs.arrayCtorAndArgs;
-            this.ctorAndArgsProvider = arrayConstructorArgs.ctorAndArgsProvider;
-            this.lengths = arrayConstructorArgs.lengths;
-            this.containingIndex = arrayConstructorArgs.containingIndex;
-        }
-
-        public CtorAndArgs getArrayCtorAndArgs() {
-            return arrayCtorAndArgs;
+        public void setConstructionArgs(final CtorAndArgsProvider ctorAndArgsProvider, final long[] lengths) {
+            this.ctorAndArgsProvider = ctorAndArgsProvider;
+            this.lengths = lengths;
         }
 
         public CtorAndArgsProvider getCtorAndArgsProvider() {
@@ -878,22 +881,16 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             return lengths;
         }
 
-        public long[] getContainingIndex() {
-            return containingIndex;
-        }
-
         private boolean active = false;
 
-        private CtorAndArgs arrayCtorAndArgs = null;
         private CtorAndArgsProvider ctorAndArgsProvider = null;
         private long[] lengths = null;
-        private long[] containingIndex = null;
     }
 
     private static final ThreadLocal<ConstructorMagic> threadLocalConstructorMagic = new ThreadLocal<ConstructorMagic>();
 
     @SuppressWarnings("unchecked")
-    static ConstructorMagic getConstructorMagic() {
+    private static ConstructorMagic getConstructorMagic() {
         ConstructorMagic constructorMagic = threadLocalConstructorMagic.get();
         if (constructorMagic == null) {
             constructorMagic = new ConstructorMagic();
@@ -903,7 +900,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     }
 
     @SuppressWarnings("unchecked")
-    static void checkConstructorMagic() {
+    private static void checkConstructorMagic() {
         final ConstructorMagic constructorMagic = threadLocalConstructorMagic.get();
         if ((constructorMagic == null) || !constructorMagic.isActive()) {
             throw new IllegalArgumentException("StructuredArray<> must not be directly instantiated with a constructor. Use newInstance(...) instead.");
