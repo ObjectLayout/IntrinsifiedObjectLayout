@@ -45,10 +45,11 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         ConstructorMagic constructorMagic = getConstructorMagic();
 
         @SuppressWarnings("unchecked")
-        final CtorAndArgsProvider<T> ctorAndArgsProvider = constructorMagic.getCtorAndArgsProvider();
+        final Class<T> elementClass = constructorMagic.getElementClass();
+        @SuppressWarnings("unchecked")
+        final AbstractCtorAndArgsProvider<T> ctorAndArgsProvider = constructorMagic.getCtorAndArgsProvider();
         final long[] lengths = constructorMagic.getLengths();
         final int dimensionCount = lengths.length;
-        final Class<T> elementClass = ctorAndArgsProvider.getElementClass();
 
         // Finish consuming constructMagic arguments:
         constructorMagic.setActive(false);
@@ -163,6 +164,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * allocates room for the entire StructuredArray and all it's elements.
      */
     static <T, S extends StructuredArray<T>> S instantiateStructuredArray(
+            final Class<T> elementClass,
             final CtorAndArgs<S> arrayCtorAndArgs,
             final CtorAndArgsProvider<T> ctorAndArgsProvider,
             final long[] lengths) {
@@ -176,11 +178,11 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         // Class<T> elementClass = ctorAndArgsProvider.getElementClass();
 
         ConstructorMagic constructorMagic = getConstructorMagic();
-        constructorMagic.setConstructionArgs(ctorAndArgsProvider, lengths);
+        constructorMagic.setConstructionArgs(elementClass, ctorAndArgsProvider, lengths);
 
         // Calculate array size in the heap:
         final Class arrayClass = arrayCtorAndArgs.getConstructor().getDeclaringClass();
-        long elementSize = getInstanceSizeWhenContained(ctorAndArgsProvider.getElementClass());
+        long elementSize = getInstanceSizeWhenContained(elementClass);
         for (int dimIndex = lengths.length - 2; dimIndex >= 0; dimIndex--) {
             elementSize = getContainingObjectFootprintWhenContained(arrayClass, elementSize, lengths[dimIndex]);
         }
@@ -231,7 +233,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
                                   ArrayConstructionArgs arrayConstructionArgs)
             throws InstantiationException, IllegalAccessException, InvocationTargetException {
         ConstructorMagic constructorMagic = getConstructorMagic();
-        constructorMagic.setConstructionArgs(
+        constructorMagic.setConstructionArgs(arrayConstructionArgs.elementClass,
                 arrayConstructionArgs.ctorAndArgsProvider, arrayConstructionArgs.lengths);
         try {
             constructorMagic.setActive(true);
@@ -868,12 +870,19 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             this.active = active;
         }
 
-        public void setConstructionArgs(final CtorAndArgsProvider ctorAndArgsProvider, final long[] lengths) {
+        public void setConstructionArgs(final Class elementClass,
+                                        final AbstractCtorAndArgsProvider ctorAndArgsProvider,
+                                        final long[] lengths) {
+            this.elementClass = elementClass;
             this.ctorAndArgsProvider = ctorAndArgsProvider;
             this.lengths = lengths;
         }
 
-        public CtorAndArgsProvider getCtorAndArgsProvider() {
+        public Class getElementClass() {
+            return elementClass;
+        }
+
+        public AbstractCtorAndArgsProvider getCtorAndArgsProvider() {
             return ctorAndArgsProvider;
         }
 
@@ -883,7 +892,8 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
 
         private boolean active = false;
 
-        private CtorAndArgsProvider ctorAndArgsProvider = null;
+        Class elementClass;
+        private AbstractCtorAndArgsProvider ctorAndArgsProvider = null;
         private long[] lengths = null;
     }
 
