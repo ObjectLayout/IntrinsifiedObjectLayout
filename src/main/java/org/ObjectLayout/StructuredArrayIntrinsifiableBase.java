@@ -210,6 +210,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     void constructElementAtIndex(final long index0, final Constructor<T> constructor, Object... args)
             throws InstantiationException, IllegalAccessException, InvocationTargetException
     {
+        if ((index0 < 0) || (index0 > getDim0Length())) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
         // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
         T element = constructor.newInstance(args);
         storeElementInLocalStorageAtIndex(element, index0);
@@ -225,6 +228,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     void constructSubArrayAtIndex(long index0, final Constructor<StructuredArray<T>> constructor,
                                   ArrayConstructionArgs arrayConstructionArgs)
             throws InstantiationException, IllegalAccessException, InvocationTargetException {
+        if ((index0 < 0) || (index0 > getDim0Length())) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
         ConstructorMagic constructorMagic = getConstructorMagic();
         constructorMagic.setConstructionArgs(arrayConstructionArgs.elementClass,
                 arrayConstructionArgs.ctorAndArgsProvider, arrayConstructionArgs.lengths);
