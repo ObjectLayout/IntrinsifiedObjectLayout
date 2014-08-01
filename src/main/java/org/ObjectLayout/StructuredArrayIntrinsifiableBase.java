@@ -65,19 +65,13 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         // Calculate and populate elementSizes and paddingSizes:
         final long[] elementSizes = new long[dimensionCount];
         final long[] paddingSizes = new long[dimensionCount];
-        long elementSizeWhenContained = getInstanceSizeWhenContained(elementClass);
-        long elementSize = getInstanceSizeWhenContained(elementClass);
-        elementSizes[dimensionCount - 1] = elementSizeWhenContained;
-        paddingSizes[dimensionCount - 1] = getPrePaddingInObjectSize(elementSizeWhenContained) +
-                elementSizeWhenContained - elementSize;
+        long elementSize = getInstanceFootprintWhenContained(elementClass);
+        elementSizes[dimensionCount - 1] = elementSize;
+        paddingSizes[dimensionCount - 1] = getPrePaddingInObjectFootprint(elementSize);
         for (int dim = dimensionCount - 2; dim >= 0; dim--) {
-            long sizeWhenContained = getContainingObjectFootprintWhenContained(this.getClass(),
-                    elementSizes[dim + 1], lengths[dim]);
-            long size = getContainingObjectFootprint(this.getClass(), elementSizes[dim + 1], lengths[dim]);
-            elementSizes[dim] = sizeWhenContained;
-            // padding size is the sum of whatever pre padding this object size has and the difference
-            // between it's WhenContained and it's un-contained sizes:
-            paddingSizes[dim] = getPrePaddingInObjectSize(sizeWhenContained) + sizeWhenContained - size;
+            long size = getContainingObjectFootprintWhenContained(this.getClass(), elementSizes[dim + 1], lengths[dim]);
+            elementSizes[dim] = size;
+            paddingSizes[dim] = getPrePaddingInObjectFootprint(size);
         }
 
         // initialize hidden fields:
@@ -182,7 +176,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
 
         // Calculate array size in the heap:
         final Class arrayClass = arrayCtorAndArgs.getConstructor().getDeclaringClass();
-        long elementSize = getInstanceSizeWhenContained(elementClass);
+        long elementSize = getInstanceFootprintWhenContained(elementClass);
         for (int dimIndex = lengths.length - 2; dimIndex >= 0; dimIndex--) {
             elementSize = getContainingObjectFootprintWhenContained(arrayClass, elementSize, lengths[dimIndex]);
         }
@@ -939,9 +933,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         }
     }
 
-    static long getInstanceSizeWhenContained(Class instanceClass) {
+    static long getInstanceFootprintWhenContained(Class instanceClass) {
         // TODO: implement with something like:
-        // return unsafe.getInstanceSizeWhenContained(instanceClass);
+        // return unsafe.getInstanceFootprintWhenContained(instanceClass);
         return 0;
     }
 
@@ -954,7 +948,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     static long getContainingObjectFootprintWhenContained(Class containerClass, long containedElementSize, long numberOfElements) {
         // TODO: implement with something like:
         // return unsafe.getContainingObjectFootprintWhenContained(this.getClass(), containedElementSize, numberOfElements);
-        return getInstanceSizeWhenContained(containerClass) + (numberOfElements * containedElementSize);
+        return getInstanceFootprintWhenContained(containerClass) + (numberOfElements * containedElementSize);
     }
 
     static long getContainingObjectFootprint(Class containerClass, long containedElementSize, long numberOfElements) {
@@ -963,10 +957,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return getInstanceSize(containerClass) + (numberOfElements * containedElementSize);
     }
 
-    static long getPrePaddingInObjectSize(long objectSize) {
+    static long getPrePaddingInObjectFootprint(long objectFootprint) {
         // objectSize is inclusive of any padding.
         // TODO: implement with something like:
-        // return unsafe.getPrePaddingInObjectSize(objectSize);
+        // return unsafe.getPrePaddingInObjectFootprint(objectSize);
         return 0;
     }
 
