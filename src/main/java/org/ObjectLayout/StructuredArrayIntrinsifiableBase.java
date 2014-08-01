@@ -975,8 +975,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         return null;
     }
 
-    static void constructObjectAtOffset(Object containingObject, long offset, Constructor c, Object... args) {
+    static void constructObjectAtOffset(Object containingObject, long offset, long objectPrePadding,
+                                        boolean isContained, Constructor c, Object... args)
+            throws InstantiationException, IllegalAccessException, InvocationTargetException  {
         // TODO: implement with something like:
-        // unsafe.constructObjectAtOffset(containingObject, offset, c, args)
+        // unsafe.constructObjectAtOffset(containingObject, offset, objectPrePadding, isContained, c, args)
     }
  }
