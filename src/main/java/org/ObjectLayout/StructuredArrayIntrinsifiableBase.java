@@ -160,7 +160,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     static <T, S extends StructuredArray<T>> S instantiateStructuredArray(
             final Class<T> elementClass,
             final CtorAndArgs<S> arrayCtorAndArgs,
-            final CtorAndArgsProvider<T> ctorAndArgsProvider,
+            final AbstractCtorAndArgsProvider<T> ctorAndArgsProvider,
             final long[] lengths) {
 
         // For implementations that need the array class and the element class,
@@ -189,7 +189,6 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             // TODO: use allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate room for array
             // TODO: replace constructor.newInstance() call with constructObjectAtOffset() call:
             return arrayConstructor.newInstance(arrayCtorAndArgs.getArgs());
-
         } catch (InstantiationException ex) {
             throw new RuntimeException(ex);
         } catch (IllegalAccessException ex) {
