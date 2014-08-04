@@ -3,8 +3,12 @@
  * as explained at http://creativecommons.org/publicdomain/zero/1.0/
  */
 
-package org.ObjectLayout;
+package org.ObjectLayout.intrinsifiable;
 
+import org.ObjectLayout.AbstractCtorAndArgsProvider;
+import org.ObjectLayout.ArrayConstructionArgs;
+import org.ObjectLayout.CtorAndArgs;
+import org.ObjectLayout.StructuredArray;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Constructor;
@@ -40,7 +44,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * in "Internal fields" section farther below.
      */
 
-    StructuredArrayIntrinsifiableBase() {
+    protected StructuredArrayIntrinsifiableBase() {
         checkConstructorMagic();
         ConstructorMagic constructorMagic = getConstructorMagic();
 
@@ -157,7 +161,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with one that
      * allocates room for the entire StructuredArray and all it's elements.
      */
-    static <T, S extends StructuredArray<T>> S instantiateStructuredArray(
+    protected static <T, S extends StructuredArray<T>> S instantiateStructuredArray(
             final Class<T> elementClass,
             final CtorAndArgs<S> arrayCtorAndArgs,
             final AbstractCtorAndArgsProvider<T> ctorAndArgsProvider,
@@ -207,7 +211,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
      * construction-in-place call on a previously allocated memory location associated with the given index.
      */
-    void constructElementAtIndex(final long index0, final Constructor<T> constructor, Object... args)
+    protected void constructElementAtIndex(final long index0, final Constructor<T> constructor, Object... args)
             throws InstantiationException, IllegalAccessException, InvocationTargetException
     {
         if ((index0 < 0) || (index0 > getDim0Length())) {
@@ -225,15 +229,15 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
      * construction-in-place call on a previously allocated memory location associated with the given index.
      */
-    void constructSubArrayAtIndex(long index0, final Constructor<StructuredArray<T>> constructor,
+    protected void constructSubArrayAtIndex(long index0, final Constructor<StructuredArray<T>> constructor,
                                   ArrayConstructionArgs arrayConstructionArgs)
             throws InstantiationException, IllegalAccessException, InvocationTargetException {
         if ((index0 < 0) || (index0 > getDim0Length())) {
             throw new ArrayIndexOutOfBoundsException();
         }
         ConstructorMagic constructorMagic = getConstructorMagic();
-        constructorMagic.setConstructionArgs(arrayConstructionArgs.elementClass,
-                arrayConstructionArgs.ctorAndArgsProvider, arrayConstructionArgs.lengths);
+        constructorMagic.setConstructionArgs(arrayConstructionArgs.getElementClass(),
+                arrayConstructionArgs.getCtorAndArgsProvider(), arrayConstructionArgs.getLengths());
         try {
             constructorMagic.setActive(true);
             // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
@@ -251,7 +255,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    T get(final int index)
+    protected T get(final int index)
             throws IllegalArgumentException {
         if (getDimensionCount() != 1) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
@@ -274,7 +278,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    T get(final int index0, final int index1)
+    protected T get(final int index0, final int index1)
             throws IllegalArgumentException {
         if (getDimensionCount() != 2) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
@@ -299,7 +303,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    T get(final int index0, final int index1, final int index2)
+    protected T get(final int index0, final int index1, final int index2)
             throws IllegalArgumentException {
         if (getDimensionCount() != 3) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
@@ -326,7 +330,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    T get(final long index)
+    protected T get(final long index)
             throws IllegalArgumentException {
         if (getDimensionCount() != 1) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
@@ -345,8 +349,8 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
 
         // Calculate index into long-addressable-only partitions:
         final long longIndex = (index - Integer.MAX_VALUE);
-        final int partitionIndex = (int)(longIndex >>> StructuredArray.MAX_EXTRA_PARTITION_SIZE_POW2_EXPONENT);
-        final int partitionOffset = (int)longIndex & StructuredArray.PARTITION_MASK;
+        final int partitionIndex = (int)(longIndex >>> MAX_EXTRA_PARTITION_SIZE_POW2_EXPONENT);
+        final int partitionOffset = (int)longIndex & PARTITION_MASK;
 
         return longAddressableElements[partitionIndex][partitionOffset];
     }
@@ -358,7 +362,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    T get(final long index0, final long index1)
+    protected T get(final long index0, final long index1)
             throws IllegalArgumentException {
         if (getDimensionCount() != 2) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
@@ -384,7 +388,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    T get(final long index0, final long index1, final long index2)
+    protected T get(final long index0, final long index1, final long index2)
             throws IllegalArgumentException {
         if (getDimensionCount() != 3) {
             throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
@@ -416,7 +420,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    T get(final long[] indices, final int indexOffset) throws IllegalArgumentException {
+    protected T get(final long[] indices, final int indexOffset) throws IllegalArgumentException {
         int dimensionCount = getDimensionCount();
         if ((indices.length - indexOffset) != dimensionCount) {
             throw new IllegalArgumentException("number of relevant elements in indices must match array dimension count");
@@ -441,7 +445,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    T get(final int[] indices, final int indexOffset) throws IllegalArgumentException {
+    protected T get(final int[] indices, final int indexOffset) throws IllegalArgumentException {
         int dimensionCount = getDimensionCount();
         if ((indices.length - indexOffset) != dimensionCount) {
             throw new IllegalArgumentException("number of relevant elements in indices must match array dimension count");
@@ -463,7 +467,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * structuredArray reference without requiring a de-reference).
      */
     @SuppressWarnings("unchecked")
-    StructuredArray<T> getSubArray(final long index) throws IllegalArgumentException {
+    protected StructuredArray<T> getSubArray(final long index) throws IllegalArgumentException {
         if (getDimensionCount() < 2) {
             throw new IllegalArgumentException("cannot call getSubArrayL() on single dimensional array");
         }
@@ -481,8 +485,8 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
 
         // Calculate index into long-addressable-only partitions:
         final long longIndex = (index - Integer.MAX_VALUE);
-        final int partitionIndex = (int)(longIndex >>> StructuredArray.MAX_EXTRA_PARTITION_SIZE_POW2_EXPONENT);
-        final int partitionOffset = (int)longIndex & StructuredArray.PARTITION_MASK;
+        final int partitionIndex = (int)(longIndex >>> MAX_EXTRA_PARTITION_SIZE_POW2_EXPONENT);
+        final int partitionOffset = (int)longIndex & PARTITION_MASK;
 
         return longAddressableSubArrays[partitionIndex][partitionOffset];
     }
@@ -495,7 +499,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
      * structuredArray reference without requiring a de-reference).
      */
     @SuppressWarnings("unchecked")
-    StructuredArray<T> getSubArray(final int index) throws IllegalArgumentException {
+    protected StructuredArray<T> getSubArray(final int index) throws IllegalArgumentException {
         if (getDimensionCount() < 2) {
             throw new IllegalArgumentException("cannot call getSubArray() on single dimensional array");
         }
@@ -508,6 +512,30 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         // return (StructuredArray<T>) deriveContainedObjectAtOffset(this, offset);
 
         return intAddressableSubArrays[index];
+    }
+
+
+    //
+    //
+    // Accessor methods for instance state:
+    //
+    //
+
+    protected int getDimensionCount() {
+        return unsafe.getInt(this, dimensionCountOffset);
+    }
+
+    @SuppressWarnings("unchecked")
+    protected Class<T> getElementClass() {
+        return (Class<T>) unsafe.getObject(this, elementClassOffset);
+    }
+
+    protected long getLength() {
+        return getDim0Length();
+    }
+
+    protected long[] getLengths() {
+        return (long[]) unsafe.getObject(this, lengthsOffset);
     }
 
     //
@@ -525,10 +553,6 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             throw new IllegalArgumentException("cannot change value after construction");
         }
         unsafe.putInt(this, bodySizeOffset, bodySize);
-    }
-
-    int getDimensionCount() {
-        return unsafe.getInt(this, dimensionCountOffset);
     }
 
     private void initDimensionCount(int dimensionCount) {
@@ -637,10 +661,6 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         unsafe.putLong(this, dim2PaddingSizeOffset, dim2PaddingSize);
     }
 
-    long[] getLengths() {
-        return (long[]) unsafe.getObject(this, lengthsOffset);
-    }
-
     private void initLengths(long[] lengths) {
         if (isInitialized) {
             throw new IllegalArgumentException("cannot change value after construction");
@@ -668,11 +688,6 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             throw new IllegalArgumentException("cannot change value after construction");
         }
         unsafe.putObject(this, paddingSizesOffset, paddingSizes);
-    }
-
-    @SuppressWarnings("unchecked")
-    Class<T> getElementClass() {
-        return (Class<T>) unsafe.getObject(this, elementClassOffset);
     }
 
     private void initElementClass(Class<T> elementClass) {
@@ -725,33 +740,6 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     //    private long[] elementSizes;
     //    private long[] paddingSizes;
     //    private Class<T> elementClass;
-
-
-    //  Removed private java fields and getters (from original vanilla version):
-
-//    private final int dimensionCount;
-//
-//    private final Class<T> elementClass;
-//
-//    private final long length;            // A cached lengths[0]
-//
-//    private final long[] lengths;
-//
-//    int getDimensionCount() {
-//        return dimensionCount;
-//    }
-//
-//    Class<T> getElementClass() {
-//        return elementClass;
-//    }
-//
-    long getLength() {
-        return getDim0Length();
-    }
-//
-//    long[] getLengths() {
-//        return lengths;
-//    }
 
     //
     //
