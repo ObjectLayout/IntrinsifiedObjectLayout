@@ -284,7 +284,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             throw new ArrayIndexOutOfBoundsException();
         }
         // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() +
+        // long offset = getBodySize() + getBodySize() +
         //      (getDim0PaddingSize() + (index0 * getDim0ElementSize())) +
         //      (getDim1PaddingSize() + (index1 * getDim1ElementSize()));
         // return (T) deriveContainedObjectAtOffset(this, offset);
@@ -310,9 +310,10 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             throw new ArrayIndexOutOfBoundsException();
         }
         // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() +
+        // long offset = getBodySize() + getBodySize() + getBodySize() +
         //      (getDim0PaddingSize() + (index0 * getDim0ElementSize())) +
-        //      (getDim1PaddingSize() + (index1 * getDim1ElementSize()));
+        //      (getDim1PaddingSize() + (index1 * getDim1ElementSize())) +
+        //      (getDim1PaddingSize() + (index2 * getDim2ElementSize()));
         // return (T) deriveContainedObjectAtOffset(this, offset);
 
         return getSubArray(index0).getSubArray(index1).get(index2);
@@ -368,7 +369,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         }
 
         // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() +
+        // long offset = getBodySize() + getBodySize() +
         //      (getDim0PaddingSize() + (index0 * getDim0ElementSize())) +
         //      (getDim1PaddingSize() + (index1 * getDim1ElementSize()));
         // return (T) deriveContainedObjectAtOffset(this, offset);
@@ -395,7 +396,7 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         }
 
         // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() +
+        // long offset = getBodySize() + getBodySize() + getBodySize() +
         //      (getDim0PaddingSize() + (index0 * getDim0ElementSize())) +
         //      (getDim1PaddingSize() + (index1 * getDim1ElementSize())) +
         //      (getDim2PaddingSize() + (index1 * getDim2ElementSize()));
