@@ -241,6 +241,9 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         try {
             constructorMagic.setActive(true);
             // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
+            // long offset = getBodySize() + getDim0PaddingSize() + (index0 * getDim0ElementSize());
+            // constructObjectAtOffset(this, offset, getDim0PaddingSize(),
+            //        true /* isContained */, constructor, null);
             StructuredArray<T> subArray = constructor.newInstance();
             storeSubArrayInLocalStorageAtIndex(subArray, index0);
         } finally {
