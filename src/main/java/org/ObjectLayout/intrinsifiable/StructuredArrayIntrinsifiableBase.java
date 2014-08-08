@@ -236,15 +236,6 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             throw new ArrayIndexOutOfBoundsException();
         }
 
-        // Calculate array size in the heap:
-        final Class arrayClass = constructor.getDeclaringClass();
-        long elementSize = getInstanceFootprintWhenContained(arrayConstructionArgs.getElementClass());
-        long lengths[] = arrayConstructionArgs.getLengths();
-        for (int dimIndex = lengths.length - 2; dimIndex >= 0; dimIndex--) {
-            elementSize = getContainingObjectFootprintWhenContained(arrayClass, elementSize, lengths[dimIndex]);
-        }
-        long subArrayFootprint = getContainingObjectFootprint(arrayClass, elementSize, lengths[0]);
-
         // Set up parameters to be passed via ConstructorMagic:
         ConstructorMagic constructorMagic = getConstructorMagic();
         constructorMagic.setConstructionArgs(arrayConstructionArgs.getElementClass(),
@@ -254,8 +245,8 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
             constructorMagic.setActive(true);
             // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
             // long offset = getBodySize() + getDim0PaddingSize() + (index0 * getDim0ElementSize());
-            // constructObjectAtOffset(this, offset, getDim0PaddingSize(),
-            //        true /* isContained */, true /* isContainer */, subArrayFootprint, constructor, null);
+            constructObjectAtOffset(this, offset, getDim0PaddingSize(),
+                    true /* isContained */, true /* isContainer */, getDim0ElementSize(), constructor, null);
 
             StructuredArray<T> subArray = constructor.newInstance();
             storeSubArrayInLocalStorageAtIndex(subArray, index0);
