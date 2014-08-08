@@ -22,7 +22,7 @@ import java.lang.reflect.InvocationTargetException;
  *
  * @param <T>
  */
-abstract class StructuredArrayIntrinsifiableBase<T> {
+public abstract class StructuredArrayIntrinsifiableBase<T> {
 
     // the existence of this field (not it's value) indicates that the class should be intrinsified:
     // (This allows the JVM to make this determination at load time, and not wait for initialization)
