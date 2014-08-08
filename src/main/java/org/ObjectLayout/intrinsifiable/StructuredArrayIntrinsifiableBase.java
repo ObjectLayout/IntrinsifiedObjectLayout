@@ -235,15 +235,28 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
         if ((index0 < 0) || (index0 > getDim0Length())) {
             throw new ArrayIndexOutOfBoundsException();
         }
+
+        // Calculate array size in the heap:
+        final Class arrayClass = constructor.getDeclaringClass();
+        long elementSize = getInstanceFootprintWhenContained(arrayConstructionArgs.getElementClass());
+        long lengths[] = arrayConstructionArgs.getLengths();
+        for (int dimIndex = lengths.length - 2; dimIndex >= 0; dimIndex--) {
+            elementSize = getContainingObjectFootprintWhenContained(arrayClass, elementSize, lengths[dimIndex]);
+        }
+        long subArrayFootprint = getContainingObjectFootprint(arrayClass, elementSize, lengths[0]);
+
+        // Set up parameters to be passed via ConstructorMagic:
         ConstructorMagic constructorMagic = getConstructorMagic();
         constructorMagic.setConstructionArgs(arrayConstructionArgs.getElementClass(),
                 arrayConstructionArgs.getCtorAndArgsProvider(), arrayConstructionArgs.getLengths());
+
         try {
             constructorMagic.setActive(true);
             // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
             // long offset = getBodySize() + getDim0PaddingSize() + (index0 * getDim0ElementSize());
             // constructObjectAtOffset(this, offset, getDim0PaddingSize(),
-            //        true /* isContained */, constructor, null);
+            //        true /* isContained */, true /* isContainer */, subArrayFootprint, constructor, null);
+
             StructuredArray<T> subArray = constructor.newInstance();
             storeSubArrayInLocalStorageAtIndex(subArray, index0);
         } finally {
@@ -974,9 +987,11 @@ abstract class StructuredArrayIntrinsifiableBase<T> {
     }
 
     static void constructObjectAtOffset(Object containingObject, long offset, long objectPrePadding,
-                                        boolean isContained, Constructor c, Object... args)
+                                        boolean isContained, boolean isContainer, long objectFootprint,
+                                        Constructor constructor, Object... args)
             throws InstantiationException, IllegalAccessException, InvocationTargetException  {
         // TODO: implement with something like:
-        // unsafe.constructObjectAtOffset(containingObject, offset, objectPrePadding, isContained, c, args)
+        // unsafe.constructObjectAtOffset(containingObject, offset, objectPrePadding, isContained,
+        //      isContainer, objectFootprint, constructor, args)
     }
  }
