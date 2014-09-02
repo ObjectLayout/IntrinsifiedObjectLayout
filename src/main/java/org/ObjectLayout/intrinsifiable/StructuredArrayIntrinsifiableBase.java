@@ -5,8 +5,6 @@
 
 package org.ObjectLayout.intrinsifiable;
 
-import org.ObjectLayout.StructuredArray;
-import org.ObjectLayout.StructuredArrayModel;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Constructor;
@@ -48,22 +46,22 @@ public abstract class StructuredArrayIntrinsifiableBase<T> {
         ConstructorMagic constructorMagic = getConstructorMagic();
 
         @SuppressWarnings("unchecked")
-        final StructuredArrayModel<StructuredArray<T>, T> arrayModel =
+        final StructuredArrayIntrinsifiableModelBase<StructuredArrayIntrinsifiableBase<T>, T> arrayModel =
                 constructorMagic.getArrayModel();
 
         // Finish consuming constructMagic arguments:
         constructorMagic.setActive(false);
 
-        if (arrayModel.getLength() < 0) {
+        if (arrayModel._getLength() < 0) {
             throw new IllegalArgumentException("length cannot be negative");
         }
 
         // Calculate values used to populate relevant fields:
         final long bodySize = (int) getInstanceSize(this.getClass());
-        final long length = arrayModel.getLength();
+        final long length = arrayModel._getLength();
         final long elementSize = elementFootprint(arrayModel);
         final long paddingSize = getPrePaddingInObjectFootprint(elementSize);
-        final Class<T> elementClass = arrayModel.getElementClass();
+        final Class<T> elementClass = arrayModel._getElementClass();
 
         // initialize hidden fields:
         initBodySize((int) getInstanceSize(this.getClass()));
@@ -103,8 +101,8 @@ public abstract class StructuredArrayIntrinsifiableBase<T> {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with one that
      * allocates room for the entire StructuredArray and all it's elements.
      */
-    protected static <S extends StructuredArray<T>, T> S instantiateStructuredArray(
-            StructuredArrayModel<S, T> arrayModel, Constructor<S> arrayConstructor, Object... args) {
+    protected static <S extends StructuredArrayIntrinsifiableBase<T>, T> S instantiateStructuredArray(
+            StructuredArrayIntrinsifiableModelBase<S, T> arrayModel, Constructor<S> arrayConstructor, Object... args) {
 
         // For implementations that need the array class and the element class,
         // this is how
@@ -137,24 +135,24 @@ public abstract class StructuredArrayIntrinsifiableBase<T> {
         }
     }
 
-    private static long elementFootprint(StructuredArrayModel arrayModel) {
-        long footprint = (arrayModel.getSubArrayModel() == null) ?
-                getInstanceFootprintWhenContained(arrayModel.getElementClass()) :
-                arrayFootprint(arrayModel.getSubArrayModel(), true /* contained */);
+    private static long elementFootprint(StructuredArrayIntrinsifiableModelBase arrayModel) {
+        long footprint = (arrayModel._getSubArrayModel() == null) ?
+                getInstanceFootprintWhenContained(arrayModel._getElementClass()) :
+                arrayFootprint(arrayModel._getSubArrayModel(), true /* contained */);
         return footprint;
     }
 
-    private static long arrayFootprint(StructuredArrayModel arrayModel, boolean contained) {
+    private static long arrayFootprint(StructuredArrayIntrinsifiableModelBase arrayModel, boolean contained) {
         long footprint = contained ?
                 getContainingObjectFootprintWhenContained(
-                        arrayModel.getArrayClass(),
+                        arrayModel._getArrayClass(),
                         elementFootprint(arrayModel),
-                        arrayModel.getLength()
+                        arrayModel._getLength()
                 ) :
                 getContainingObjectFootprint(
-                        arrayModel.getArrayClass(),
+                        arrayModel._getArrayClass(),
                         elementFootprint(arrayModel),
-                        arrayModel.getLength()
+                        arrayModel._getLength()
                 );
         return footprint;
     }
@@ -166,9 +164,11 @@ public abstract class StructuredArrayIntrinsifiableBase<T> {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
      * construction-in-place call on a previously allocated memory location associated with the given index.
      */
-    protected void constructElementAtIndex(final long index, final Constructor<T> constructor, Object... args)
-            throws InstantiationException, IllegalAccessException, InvocationTargetException
-    {
+    protected void constructElementAtIndex(
+            final long index,
+            final Constructor<T> constructor,
+            Object... args)
+            throws InstantiationException, IllegalAccessException, InvocationTargetException {
         if ((index < 0) || (index > getLength())) {
             throw new ArrayIndexOutOfBoundsException();
         }
@@ -176,6 +176,35 @@ public abstract class StructuredArrayIntrinsifiableBase<T> {
         T element = constructor.newInstance(args);
         storeElementInLocalStorageAtIndex(element, index);
     }
+
+    /**
+     * Construct a fresh sub-array intended to occupy a given index in the given array, using the
+     * supplied constructor.
+     *
+     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
+     * construction-in-place call on a previously allocated memory location associated with the given index.
+     */
+    protected void constructSubArrayAtIndex(
+            long index,
+            StructuredArrayIntrinsifiableModelBase subArrayModel,
+            final Constructor<T> subArrayConstructor,
+            final Object... args)
+            throws InstantiationException, IllegalAccessException, InvocationTargetException {
+        if ((index < 0) || (index > getLength())) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
+        ConstructorMagic constructorMagic = getConstructorMagic();
+        constructorMagic.setConstructionArgs(subArrayModel);
+        try {
+            constructorMagic.setActive(true);
+            // TODO: replace subArrayConstructor.newInstance() with constructObjectAtOffset() call:
+            T subArray = subArrayConstructor.newInstance(args);
+            storeElementInLocalStorageAtIndex(subArray, index);
+        } finally {
+            constructorMagic.setActive(false);
+        }
+    }
+
 
     /**
      * Get an element at a supplied [index] in a StructuredArray
@@ -393,16 +422,16 @@ public abstract class StructuredArrayIntrinsifiableBase<T> {
             this.active = active;
         }
 
-        public void setConstructionArgs(StructuredArrayModel arrayModel) {
+        public void setConstructionArgs(StructuredArrayIntrinsifiableModelBase arrayModel) {
             this.arrayModel = arrayModel;
         }
 
-        public StructuredArrayModel getArrayModel() {
+        public StructuredArrayIntrinsifiableModelBase getArrayModel() {
             return arrayModel;
         }
 
         private boolean active = false;
-        StructuredArrayModel arrayModel;
+        StructuredArrayIntrinsifiableModelBase arrayModel;
     }
 
     private static final ThreadLocal<ConstructorMagic> threadLocalConstructorMagic =
