@@ -5,6 +5,8 @@
 
 package org.ObjectLayout.intrinsifiable;
 
+import org.ObjectLayout.StructuredArray;
+import org.ObjectLayout.StructuredArrayModel;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Constructor;
@@ -16,11 +18,10 @@ import java.lang.reflect.InvocationTargetException;
  * that choose to intrinsify StructuredArray are expected to replace the implementation of this
  * base class.
  *
- * @param <T>
- * @param <A>
+ * @param <T> The element type
  */
 
-public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredArrayIntrinsifiableBase<T, A>> {
+public abstract class StructuredArrayIntrinsifiableBase<T> {
 
     // the existence of this field (not it's value) indicates that the class should be intrinsified:
     // (This allows the JVM to make this determination at load time, and not wait for initialization)
@@ -47,121 +48,63 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
         ConstructorMagic constructorMagic = getConstructorMagic();
 
         @SuppressWarnings("unchecked")
-        final Class<T> elementClass = constructorMagic.getElementClass();
-        final long[] lengths = constructorMagic.getLengths();
-        final int dimensionCount = lengths.length;
+        final StructuredArrayModel<StructuredArray<T>, T> arrayModel =
+                constructorMagic.getArrayModel();
 
         // Finish consuming constructMagic arguments:
         constructorMagic.setActive(false);
 
-        if (dimensionCount < 1) {
-            throw new IllegalArgumentException("dimensionCount must be at least 1");
-        }
-
-        if (lengths[0] < 0) {
+        if (arrayModel.getLength() < 0) {
             throw new IllegalArgumentException("length cannot be negative");
         }
 
-        // Calculate and populate elementSizes and paddingSizes:
-        final long[] elementSizes = new long[dimensionCount];
-        final long[] paddingSizes = new long[dimensionCount];
-        long elementSize = getInstanceFootprintWhenContained(elementClass);
-        elementSizes[dimensionCount - 1] = elementSize;
-        paddingSizes[dimensionCount - 1] = getPrePaddingInObjectFootprint(elementSize);
-        for (int dim = dimensionCount - 2; dim >= 0; dim--) {
-            long size = getContainingObjectFootprintWhenContained(this.getClass(), elementSizes[dim + 1], lengths[dim]);
-            elementSizes[dim] = size;
-            paddingSizes[dim] = getPrePaddingInObjectFootprint(size);
-        }
+        // Calculate values used to populate relevant fields:
+        final long bodySize = (int) getInstanceSize(this.getClass());
+        final long length = arrayModel.getLength();
+        final long elementSize = elementFootprint(arrayModel);
+        final long paddingSize = getPrePaddingInObjectFootprint(elementSize);
+        final Class<T> elementClass = arrayModel.getElementClass();
 
         // initialize hidden fields:
         initBodySize((int) getInstanceSize(this.getClass()));
-        initDimensionCount(dimensionCount);
-
-        initDim0Length(lengths[0]);
-        initDim0ElementSize(elementSizes[0]);
-        initDim0PaddingSize(paddingSizes[0]);
-
-        if (dimensionCount > 1) {
-            initDim1Length(lengths[1]);
-            initDim1ElementSize(elementSizes[1]);
-            initDim1PaddingSize(paddingSizes[1]);
-        }
-
-        if (dimensionCount > 2) {
-            initDim2Length(lengths[2]);
-            initDim2ElementSize(elementSizes[2]);
-            initDim2PaddingSize(paddingSizes[2]);
-        }
-
-        initLengths(lengths);
-        initElementSizes(elementSizes);
-        initPaddingizes(paddingSizes);
-
+        initLength(length);
+        initElementSize(elementSize);
+        initPaddingSize(paddingSize);
         initElementClass(elementClass);
 
         // TODO: replace "vanilla" internal storage with flat representation:
-        allocateInternalStorage(dimensionCount, getLength());
+        allocateInternalStorage(getLength());
 
         // Indicate construction is complete, such that further calls to initX() initializers of
         // hidden fields will fail from this point on.
         isInitialized = true;
 
         // follow update of internal boolean indication with a modification of a public volatile
-        // to ensure ordering:
+        // to ensure ordering (this way isInitialized does not have to be volatile and normal
+        // accessor actions do not take the penalty of a volatile read barrier):
         constructionCompleted = true;
     }
 
     @Override
     public String toString() {
-        final StringBuilder lengthsString = new StringBuilder("[");
-        final StringBuilder elementSizesString = new StringBuilder("[");
-        final StringBuilder paddingSizesString = new StringBuilder("[");
-
-        lengthsString.append(getDim0Length());
-        elementSizesString.append(getDim0ElementSize());
-        paddingSizesString.append(getDim0PaddingSize());
-        if (getDimensionCount() > 1) {
-            lengthsString.append(", ").append(getDim1Length());
-            elementSizesString.append(", ").append(getDim1ElementSize());
-            paddingSizesString.append(", ").append(getDim1PaddingSize());
-        }
-        if (getDimensionCount() > 2) {
-            lengthsString.append(", ").append(getDim2Length());
-            elementSizesString.append(", ").append(getDim2ElementSize());
-            paddingSizesString.append(", ").append(getDim2PaddingSize());
-        }
-        for (int i = 3; i < getDimensionCount(); i++) {
-            lengthsString.append(", ").append(getLengths()[i]);
-            elementSizesString.append(", ").append(getElementSizes()[i]);
-            paddingSizesString.append(", ").append(getPaddingSizes()[i]);
-        }
-        lengthsString.append("]");
-        elementSizesString.append("]");
-        paddingSizesString.append("]");
-
         final StringBuilder output = new StringBuilder("StructuredArrayIntrinsifiableBase<");
-        output.append(getElementClass().getName()).append(">").append(lengthsString);
-        output.append(": sizes = ").append(elementSizesString).
-                append(", paddings = ").append(paddingSizesString).
+        output.append(getElementClass().getName()).append(">").append(getLength());
+        output.append(": elementSize = ").append(getElementSize()).
+                append(", padding = ").append(getPaddingSize()).
                 append(", bodySize = ").append(getBodySize());
 
         return new String(output);
     }
 
     /**
-     * Instantiate a StructuredArray of arrayClass with member elements of elementClass, and the
-     * set of lengths (one length per dimension in the lengths[] array), using the given constructor
-     * and arguments.
+     * Instantiate a StructuredArray of arrayClass with the given array model, and the supplied
+     * array constructor and arguments.
      *
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with one that
      * allocates room for the entire StructuredArray and all it's elements.
      */
-    protected static <T, A extends StructuredArrayIntrinsifiableBase> A instantiateStructuredArray(
-            final Class<T> elementClass,
-            final Constructor<A> arrayConstructor,
-            final Object[] arrayCtorArgs,
-            final long[] lengths) {
+    protected static <S extends StructuredArray<T>, T> S instantiateStructuredArray(
+            StructuredArrayModel<S, T> arrayModel, Constructor<S> arrayConstructor, Object... args) {
 
         // For implementations that need the array class and the element class,
         // this is how
@@ -169,25 +112,20 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
         //
         // Class<? extends StructuredArray<T>> arrayClass =
         // arrayConstructor.getDeclaringClass();
-        // Class<T> elementClass = ctorAndArgsProvider.getElementClass();
+        // Class<T> elementClass = arrayModel.getElementClass();
 
         ConstructorMagic constructorMagic = getConstructorMagic();
-        constructorMagic.setConstructionArgs(elementClass, lengths);
+        constructorMagic.setConstructionArgs(arrayModel);
 
         // Calculate array size in the heap:
-        final Class arrayClass = arrayConstructor.getDeclaringClass();
-        long elementSize = getInstanceFootprintWhenContained(elementClass);
-        for (int dimIndex = lengths.length - 2; dimIndex >= 0; dimIndex--) {
-            elementSize = getContainingObjectFootprintWhenContained(arrayClass, elementSize, lengths[dimIndex]);
-        }
-        long size = getContainingObjectFootprint(arrayClass, elementSize, lengths[0]);
+        long size = arrayFootprint(arrayModel, false /* not contained */);
 
         try {
             constructorMagic.setActive(true);
             arrayConstructor.setAccessible(true);
             // TODO: use allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate room for array
             // TODO: replace constructor.newInstance() call with constructObjectAtOffset() call:
-            return arrayConstructor.newInstance(arrayCtorArgs);
+            return arrayConstructor.newInstance(args);
         } catch (InstantiationException ex) {
             throw new RuntimeException(ex);
         } catch (IllegalAccessException ex) {
@@ -199,6 +137,28 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
         }
     }
 
+    private static long elementFootprint(StructuredArrayModel arrayModel) {
+        long footprint = (arrayModel.getSubArrayModel() == null) ?
+                getInstanceFootprintWhenContained(arrayModel.getElementClass()) :
+                arrayFootprint(arrayModel.getSubArrayModel(), true /* contained */);
+        return footprint;
+    }
+
+    private static long arrayFootprint(StructuredArrayModel arrayModel, boolean contained) {
+        long footprint = contained ?
+                getContainingObjectFootprintWhenContained(
+                        arrayModel.getArrayClass(),
+                        elementFootprint(arrayModel),
+                        arrayModel.getLength()
+                ) :
+                getContainingObjectFootprint(
+                        arrayModel.getArrayClass(),
+                        elementFootprint(arrayModel),
+                        arrayModel.getLength()
+                );
+        return footprint;
+    }
+
     /**
      * Construct a fresh element intended to occupy a given index in the given array, using the
      * supplied constructor and arguments.
@@ -206,49 +166,15 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
      * construction-in-place call on a previously allocated memory location associated with the given index.
      */
-    protected void constructElementAtIndex(final long index0, final Constructor<T> constructor, Object... args)
+    protected void constructElementAtIndex(final long index, final Constructor<T> constructor, Object... args)
             throws InstantiationException, IllegalAccessException, InvocationTargetException
     {
-        if ((index0 < 0) || (index0 > getDim0Length())) {
+        if ((index < 0) || (index > getLength())) {
             throw new ArrayIndexOutOfBoundsException();
         }
         // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
         T element = constructor.newInstance(args);
-        storeElementInLocalStorageAtIndex(element, index0);
-    }
-
-    /**
-     * Construct a fresh sub-array intended to occupy a given index in the given array, using the
-     * supplied constructor.
-     *
-     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
-     * construction-in-place call on a previously allocated memory location associated with the given index.
-     */
-    protected void constructSubArrayAtIndex(long index0,
-                                            final Constructor<A> constructor,
-                                            Class<T> elementClass,
-                                            long[] lengths)
-            throws InstantiationException, IllegalAccessException, InvocationTargetException {
-        if ((index0 < 0) || (index0 > getDim0Length())) {
-            throw new ArrayIndexOutOfBoundsException();
-        }
-
-        // Set up parameters to be passed via ConstructorMagic:
-        ConstructorMagic constructorMagic = getConstructorMagic();
-        constructorMagic.setConstructionArgs(elementClass, lengths);
-
-        try {
-            constructorMagic.setActive(true);
-            // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
-            // long offset = getBodySize() + getDim0PaddingSize() + (index0 * getDim0ElementSize());
-            constructObjectAtOffset(this, offset, getDim0PaddingSize(),
-                    true /* isContained */, true /* isContainer */, getDim0ElementSize(), constructor, null);
-
-            A subArray = constructor.newInstance();
-            storeSubArrayInLocalStorageAtIndex(subArray, index0);
-        } finally {
-            constructorMagic.setActive(false);
-        }
+        storeElementInLocalStorageAtIndex(element, index);
     }
 
     /**
@@ -260,70 +186,15 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
      */
     protected T get(final int index)
             throws IllegalArgumentException {
-        if (getDimensionCount() != 1) {
-            throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
-        }
-        if ((index < 0) || (index > getDim0Length())) {
+        if ((index < 0) || (index > getLength())) {
             throw new ArrayIndexOutOfBoundsException();
         }
 
         // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() + (getDim0PaddingSize() + (index * getDim0ElementSize()));
+        // long offset = getBodySize() + (getPaddingSize() + (index * getElementSize()));
         // return (T) deriveContainedObjectAtOffset(this, offset);
 
         return intAddressableElements[index];
-    }
-
-    /**
-     * Get an element at a supplied [index0, index1] in a StructuredArray
-     *
-     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
-     * faster access form (e.g. they may be able to derive the element reference directly from the
-     * structuredArray reference without requiring a de-reference).
-     */
-    protected T get(final int index0, final int index1)
-            throws IllegalArgumentException {
-        if (getDimensionCount() != 2) {
-            throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
-        }
-        if ((index0 < 0) || (index0 > getDim0Length()) ||
-                (index1 < 0) || (index1 > getDim1Length())) {
-            throw new ArrayIndexOutOfBoundsException();
-        }
-        // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() + getBodySize() +
-        //      (getDim0PaddingSize() + (index0 * getDim0ElementSize())) +
-        //      (getDim1PaddingSize() + (index1 * getDim1ElementSize()));
-        // return (T) deriveContainedObjectAtOffset(this, offset);
-
-        return getSubArray(index0).get(index1);
-    }
-
-    /**
-     * Get an element at a supplied [index0, index1, index2] in a StructuredArray
-     *
-     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
-     * faster access form (e.g. they may be able to derive the element reference directly from the
-     * structuredArray reference without requiring a de-reference).
-     */
-    protected T get(final int index0, final int index1, final int index2)
-            throws IllegalArgumentException {
-        if (getDimensionCount() != 3) {
-            throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
-        }
-        if ((index0 < 0) || (index0 > getDim0Length()) ||
-                (index1 < 0) || (index1 > getDim1Length()) ||
-                (index2 < 0) || (index2 > getDim2Length())) {
-            throw new ArrayIndexOutOfBoundsException();
-        }
-        // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() + getBodySize() + getBodySize() +
-        //      (getDim0PaddingSize() + (index0 * getDim0ElementSize())) +
-        //      (getDim1PaddingSize() + (index1 * getDim1ElementSize())) +
-        //      (getDim1PaddingSize() + (index2 * getDim2ElementSize()));
-        // return (T) deriveContainedObjectAtOffset(this, offset);
-
-        return getSubArray(index0).getSubArray(index1).get(index2);
     }
 
     /**
@@ -335,15 +206,12 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
      */
     protected T get(final long index)
             throws IllegalArgumentException {
-        if (getDimensionCount() != 1) {
-            throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
-        }
-        if ((index < 0) || (index > getDim0Length())) {
+        if ((index < 0) || (index > getLength())) {
             throw new ArrayIndexOutOfBoundsException();
         }
 
         // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() + (getDim0PaddingSize() + (index * getDim0ElementSize()));
+        // long offset = getBodySize() + (getPaddingSize() + (index * getElementSize()));
         // return (T) deriveContainedObjectAtOffset(this, offset);
 
         if (index < Integer.MAX_VALUE) {
@@ -358,192 +226,25 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
         return longAddressableElements[partitionIndex][partitionOffset];
     }
 
-    /**
-     * Get an element at a supplied [index0, index1] in a StructuredArray
-     *
-     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
-     * faster access form (e.g. they may be able to derive the element reference directly from the
-     * structuredArray reference without requiring a de-reference).
-     */
-    protected T get(final long index0, final long index1)
-            throws IllegalArgumentException {
-        if (getDimensionCount() != 2) {
-            throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
-        }
-        if ((index0 < 0) || (index0 > getDim0Length()) ||
-                (index1 < 0) || (index1 > getDim1Length())) {
-            throw new ArrayIndexOutOfBoundsException();
-        }
-
-        // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() + getBodySize() +
-        //      (getDim0PaddingSize() + (index0 * getDim0ElementSize())) +
-        //      (getDim1PaddingSize() + (index1 * getDim1ElementSize()));
-        // return (T) deriveContainedObjectAtOffset(this, offset);
-
-        return getSubArray(index0).get(index1);
-    }
-
-    /**
-     * Get an element at a supplied [index0, index1, index2] in a StructuredArray
-     *
-     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
-     * faster access form (e.g. they may be able to derive the element reference directly from the
-     * structuredArray reference without requiring a de-reference).
-     */
-    protected T get(final long index0, final long index1, final long index2)
-            throws IllegalArgumentException {
-        if (getDimensionCount() != 3) {
-            throw new IllegalArgumentException("number of index parameters to get() must match array dimension count");
-        }
-        if ((index0 < 0) || (index0 > getDim0Length()) ||
-                (index1 < 0) || (index1 > getDim1Length()) ||
-                (index2 < 0) || (index2 > getDim2Length())) {
-            throw new ArrayIndexOutOfBoundsException();
-        }
-
-        // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() + getBodySize() + getBodySize() +
-        //      (getDim0PaddingSize() + (index0 * getDim0ElementSize())) +
-        //      (getDim1PaddingSize() + (index1 * getDim1ElementSize())) +
-        //      (getDim2PaddingSize() + (index1 * getDim2ElementSize()));
-        // return (T) deriveContainedObjectAtOffset(this, offset);
-
-        return getSubArray(index0).getSubArray(index1).get(index2);
-    }
-
-    /**
-     * Get a reference to an element in an N dimensional array, using indices supplied in a
-     * <code>long[N + indexOffset]</code> array.
-     * indexOffset indicates the starting point in the array at which the first index should be found.
-     * This form is useful when passing index arrays through multiple levels to avoid construction of
-     * temporary varargs containers or construction of new shorter index arrays.
-     *
-     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
-     * faster access form (e.g. they may be able to derive the element reference directly from the
-     * structuredArray reference without requiring a de-reference).
-     */
-    protected T get(final long[] indices, final int indexOffset) throws IllegalArgumentException {
-        int dimensionCount = getDimensionCount();
-        if ((indices.length - indexOffset) != dimensionCount) {
-            throw new IllegalArgumentException("number of relevant elements in indices must match array dimension count");
-        }
-
-        if (dimensionCount == 1) {
-            return get(indices[indexOffset]);
-        } else {
-            A subArray = getSubArray(indices[indexOffset]);
-            return subArray.get(indices, indexOffset + 1);
-        }
-    }
-
-    /**
-     * Get a reference to an element in an N dimensional array, using indices supplied in a
-     * <code>int[N + indexOffset]</code> array.
-     * indexOffset indicates the starting point in the array at which the first index should be found.
-     * This form is useful when passing index arrays through multiple levels to avoid construction of
-     * temporary varargs containers or construction of new shorter index arrays.
-     *
-     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
-     * faster access form (e.g. they may be able to derive the element reference directly from the
-     * structuredArray reference without requiring a de-reference).
-     */
-    protected T get(final int[] indices, final int indexOffset) throws IllegalArgumentException {
-        int dimensionCount = getDimensionCount();
-        if ((indices.length - indexOffset) != dimensionCount) {
-            throw new IllegalArgumentException("number of relevant elements in indices must match array dimension count");
-        }
-
-        if (dimensionCount == 1) {
-            return get(indices[indexOffset]);
-        } else {
-            A subArray = getSubArray(indices[indexOffset]);
-            return subArray.get(indices, indexOffset + 1);
-        }
-    }
-    
-    /**
-     * Get a StructuredArray Sub array at a supplied index in a StructuredArray
-     *
-     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
-     * faster access form (e.g. they may be able to derive the element reference directly from the
-     * structuredArray reference without requiring a de-reference).
-     */
-    @SuppressWarnings("unchecked")
-    protected A getSubArray(final long index) throws IllegalArgumentException {
-        if (getDimensionCount() < 2) {
-            throw new IllegalArgumentException("cannot call getSubArrayL() on single dimensional array");
-        }
-        if ((index < 0) || (index > getDim0Length())) {
-            throw new ArrayIndexOutOfBoundsException();
-        }
-
-        // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() + (getDim0PaddingSize() + (index * getDim0ElementSize()));
-        // return (StructuredArray<T>) deriveContainedObjectAtOffset(this, offset);
-
-        if (index < Integer.MAX_VALUE) {
-            return getSubArray((int) index);
-        }
-
-        // Calculate index into long-addressable-only partitions:
-        final long longIndex = (index - Integer.MAX_VALUE);
-        final int partitionIndex = (int)(longIndex >>> MAX_EXTRA_PARTITION_SIZE_POW2_EXPONENT);
-        final int partitionOffset = (int)longIndex & PARTITION_MASK;
-
-        return longAddressableSubArrays[partitionIndex][partitionOffset];
-    }
-
-    /**
-     * Get a StructuredArray Sub array at a supplied index in a StructuredArray
-     *
-     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
-     * faster access form (e.g. they may be able to derive the element reference directly from the
-     * structuredArray reference without requiring a de-reference).
-     */
-    @SuppressWarnings("unchecked")
-    protected A getSubArray(final int index) throws IllegalArgumentException {
-        if (getDimensionCount() < 2) {
-            throw new IllegalArgumentException("cannot call getSubArray() on single dimensional array");
-        }
-        if ((index < 0) || (index > getDim0Length())) {
-            throw new ArrayIndexOutOfBoundsException();
-        }
-
-        // TODO replace with direct access logic, along the lines of:
-        // long offset = getBodySize() + (getDim0PaddingSize() + (index * getDim0ElementSize()));
-        // return (StructuredArray<T>) deriveContainedObjectAtOffset(this, offset);
-
-        return intAddressableSubArrays[index];
-    }
-
-
     //
     //
     // Accessor methods for instance state:
     //
     //
 
-    protected int getDimensionCount() {
-        return unsafe.getInt(this, dimensionCountOffset);
-    }
-
     @SuppressWarnings("unchecked")
     protected Class<T> getElementClass() {
         return (Class<T>) unsafe.getObject(this, elementClassOffset);
     }
 
-    protected long getLength() {
-        return getDim0Length();
+    private long getLength() {
+        return unsafe.getLong(this, lengthOffset);
     }
 
-    protected long[] getLengths() {
-        return (long[]) unsafe.getObject(this, lengthsOffset);
-    }
 
     //
     //
-    // Internal fields:
+    // Other internal fields accessor and initializer methods:
     //
     //
 
@@ -558,139 +259,33 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
         unsafe.putInt(this, bodySizeOffset, bodySize);
     }
 
-    private void initDimensionCount(int dimensionCount) {
+    private void initLength(long length) {
         if (isInitialized) {
             throw new IllegalArgumentException("cannot change value after construction");
         }
-        unsafe.putInt(this, dimensionCountOffset, dimensionCount);
+        unsafe.putLong(this, lengthOffset, length);
     }
 
-    private long getDim0Length() {
-        return unsafe.getLong(this, dim0LengthOffset);
+    private long getElementSize() {
+        return unsafe.getLong(this, elementSizeOffset);
     }
 
-    private void initDim0Length(long dim0Length) {
+    private void initElementSize(long elementSize) {
         if (isInitialized) {
             throw new IllegalArgumentException("cannot change value after construction");
         }
-        unsafe.putLong(this, dim0LengthOffset, dim0Length);
+        unsafe.putLong(this, elementSizeOffset, elementSize);
     }
 
-    private long getDim1Length() {
-        return unsafe.getLong(this, dim1LengthOffset);
+    private long getPaddingSize() {
+        return unsafe.getLong(this, paddingSizeOffset);
     }
 
-    private void initDim1Length(long dim1Length) {
+    private void initPaddingSize(long paddingSize) {
         if (isInitialized) {
             throw new IllegalArgumentException("cannot change value after construction");
         }
-        unsafe.putLong(this, dim1LengthOffset, dim1Length);
-    }
-
-    private long getDim2Length() {
-        return unsafe.getLong(this, dim2LengthOffset);
-    }
-
-    private void initDim2Length(long dim2Length) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putLong(this, dim2LengthOffset, dim2Length);
-    }
-
-    private long getDim0ElementSize() {
-        return unsafe.getLong(this, dim0ElementSizeOffset);
-    }
-
-    private void initDim0ElementSize(long dim0ElementSize) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putLong(this, dim0ElementSizeOffset, dim0ElementSize);
-    }
-
-    private long getDim1ElementSize() {
-        return unsafe.getLong(this, dim1ElementSizeOffset);
-    }
-
-    private void initDim1ElementSize(long dim1ElementSize) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putLong(this, dim1ElementSizeOffset, dim1ElementSize);
-    }
-
-    private long getDim2ElementSize() {
-        return unsafe.getLong(this, dim2ElementSizeOffset);
-    }
-
-    private long getDim0PaddingSize() {
-        return unsafe.getLong(this, dim0PaddingSizeOffset);
-    }
-
-    private void initDim0PaddingSize(long dim0PaddingSize) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putLong(this, dim0PaddingSizeOffset, dim0PaddingSize);
-    }
-
-    private long getDim1PaddingSize() {
-        return unsafe.getLong(this, dim1PaddingSizeOffset);
-    }
-
-    private void initDim1PaddingSize(long dim1PaddingSize) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putLong(this, dim1PaddingSizeOffset, dim1PaddingSize);
-    }
-
-    private void initDim2ElementSize(long dim2ElementSize) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putLong(this, dim2ElementSizeOffset, dim2ElementSize);
-    }
-
-    private long getDim2PaddingSize() {
-        return unsafe.getLong(this, dim2PaddingSizeOffset);
-    }
-
-    private void initDim2PaddingSize(long dim2PaddingSize) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putLong(this, dim2PaddingSizeOffset, dim2PaddingSize);
-    }
-
-    private void initLengths(long[] lengths) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putObject(this, lengthsOffset, lengths);
-    }
-
-    private long[] getElementSizes() {
-        return (long[]) unsafe.getObject(this, elementSizesOffset);
-    }
-
-    private void initElementSizes(long[] elementSizes) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putObject(this, elementSizesOffset, elementSizes);
-    }
-
-    private long[] getPaddingSizes() {
-        return (long[]) unsafe.getObject(this, paddingSizesOffset);
-    }
-
-    private void initPaddingizes(long[] paddingSizes) {
-        if (isInitialized) {
-            throw new IllegalArgumentException("cannot change value after construction");
-        }
-        unsafe.putObject(this, paddingSizesOffset, paddingSizes);
+        unsafe.putLong(this, paddingSizeOffset, paddingSize);
     }
 
     private void initElementClass(Class<T> elementClass) {
@@ -710,38 +305,18 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
 
     private static int offset = 0;
     private static final long bodySizeOffset        = offset += 8;
-    private static final long dimensionCountOffset  = offset += 8;
-    private static final long dim0LengthOffset      = offset += 8;
-    private static final long dim0ElementSizeOffset = offset += 8;
-    private static final long dim0PaddingSizeOffset = offset += 8;
-    private static final long dim1LengthOffset      = offset += 8;
-    private static final long dim1ElementSizeOffset = offset += 8;
-    private static final long dim1PaddingSizeOffset = offset += 8;
-    private static final long dim2LengthOffset      = offset += 8;
-    private static final long dim2ElementSizeOffset = offset += 8;
-    private static final long dim2PaddingSizeOffset = offset += 8;
-    private static final long lengthsOffset         = offset += 8;
-    private static final long elementSizesOffset    = offset += 8;
-    private static final long paddingSizesOffset    = offset += 8;
+    private static final long lengthOffset          = offset += 8;
+    private static final long elementSizeOffset     = offset += 8;
+    private static final long paddingSizeOffset     = offset += 8;
     private static final long elementClassOffset    = offset += 8;
 
     // These are our hidden fields, supported by the JVM's special handling of this
     // class: They are only accessible via offsets and unsafe:
 
     //    private int bodySize;
-    //    private int dimensionCount;
-    //    private long dim0Length;
-    //    private long dim0ElementSize;
-    //    private long dim0PaddingSize;
-    //    private long dim1Length;
-    //    private long dim1ElementSize;
-    //    private long dim1PaddingSize;
-    //    private long dim2Length;
-    //    private long dim2ElementSize;
-    //    private long dim2PaddingSize;
-    //    private long[] lengths;
-    //    private long[] elementSizes;
-    //    private long[] paddingSizes;
+    //    private long length;
+    //    private long elementSize;
+    //    private long paddingSize;
     //    private Class<T> elementClass;
 
     //
@@ -759,19 +334,11 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
     static final int MAX_EXTRA_PARTITION_SIZE = 1 << MAX_EXTRA_PARTITION_SIZE_POW2_EXPONENT;
     static final int PARTITION_MASK = MAX_EXTRA_PARTITION_SIZE - 1;
 
-    // Separated internal storage arrays by type for performance reasons, to avoid casting and checkcast at runtime.
-    // Wrong dimension count gets (of the wrong type for the dimension depth) will result in NPEs rather
-    // than class cast exceptions.
-
-    private A[][] longAddressableSubArrays; // Used to store subArrays at indexes above Integer.MAX_VALUE
-    private A[] intAddressableSubArrays;
-
     private T[][] longAddressableElements; // Used to store elements at indexes above Integer.MAX_VALUE
     private T[] intAddressableElements;
 
-
     @SuppressWarnings("unchecked")
-    private void allocateInternalStorage(final int dimensionCount, final long length) {
+    private void allocateInternalStorage(final long length) {
         // Allocate internal storage:
 
         // Size int-addressable sub arrays:
@@ -781,55 +348,20 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
         final int numFullPartitions = (int) (extraLength >>> MAX_EXTRA_PARTITION_SIZE_POW2_EXPONENT);
         final int lastPartitionSize = (int) extraLength & PARTITION_MASK;
 
-        if (dimensionCount > 1) {
-            // We have sub arrays, not elements:
-            intAddressableElements = null;
-            longAddressableElements = null;
-
-            intAddressableSubArrays = (A[]) new StructuredArrayIntrinsifiableBase[intLength];
-            longAddressableSubArrays = (A[][]) new StructuredArrayIntrinsifiableBase[numFullPartitions + 1][];
-            // full long-addressable-only partitions:
-            for (int i = 0; i < numFullPartitions; i++) {
-                longAddressableSubArrays[i] = (A[]) new StructuredArrayIntrinsifiableBase[MAX_EXTRA_PARTITION_SIZE];
-            }
-            // Last partition with leftover long-addressable-only size:
-            longAddressableSubArrays[numFullPartitions] = (A[]) new StructuredArrayIntrinsifiableBase[lastPartitionSize];
-
-        } else {
-            // We have elements, not sub arrays:
-            intAddressableSubArrays = null;
-            longAddressableSubArrays = null;
-
-            intAddressableElements = (T[]) new Object[intLength];
-            longAddressableElements = (T[][]) new Object[numFullPartitions + 1][];
-            // full long-addressable-only partitions:
-            for (int i = 0; i < numFullPartitions; i++) {
-                longAddressableElements[i] = (T[]) new Object[MAX_EXTRA_PARTITION_SIZE];
-            }
-            // Last partition with leftover long-addressable-only size:
-            longAddressableElements[numFullPartitions] = (T[]) new Object[lastPartitionSize];
+        intAddressableElements = (T[]) new Object[intLength];
+        longAddressableElements = (T[][]) new Object[numFullPartitions + 1][];
+        // full long-addressable-only partitions:
+        for (int i = 0; i < numFullPartitions; i++) {
+            longAddressableElements[i] = (T[]) new Object[MAX_EXTRA_PARTITION_SIZE];
         }
+        // Last partition with leftover long-addressable-only size:
+        longAddressableElements[numFullPartitions] = (T[]) new Object[lastPartitionSize];
     }
 
     private void storeElementInLocalStorageAtIndex(T element, long index0) {
-            // place in proper internal storage location:
-            if (index0 < Integer.MAX_VALUE) {
-                intAddressableElements[(int) index0] = element;
-                return;
-            }
-
-            // Calculate index into long-addressable-only partitions:
-            final long longIndex0 = (index0 - Integer.MAX_VALUE);
-            final int partitionIndex = (int) (longIndex0 >>> MAX_EXTRA_PARTITION_SIZE_POW2_EXPONENT);
-            final int partitionOffset = (int) longIndex0 & PARTITION_MASK;
-
-            longAddressableElements[partitionIndex][partitionOffset] = element;
-    }
-
-    private void storeSubArrayInLocalStorageAtIndex(A subArray, long index0) {
         // place in proper internal storage location:
         if (index0 < Integer.MAX_VALUE) {
-            intAddressableSubArrays[(int) index0] = subArray;
+            intAddressableElements[(int) index0] = element;
             return;
         }
 
@@ -838,7 +370,7 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
         final int partitionIndex = (int) (longIndex0 >>> MAX_EXTRA_PARTITION_SIZE_POW2_EXPONENT);
         final int partitionOffset = (int) longIndex0 & PARTITION_MASK;
 
-        longAddressableSubArrays[partitionIndex][partitionOffset] = subArray;
+        longAddressableElements[partitionIndex][partitionOffset] = element;
     }
 
     //
@@ -852,7 +384,7 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
      * optimized JDK implementations. It resides in this class for scoping reasons.
      */
 
-    static class ConstructorMagic {
+    private static class ConstructorMagic {
         private boolean isActive() {
             return active;
         }
@@ -861,27 +393,17 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
             this.active = active;
         }
 
-        public void setConstructionArgs(final Class elementClass,
-                                        final long[] lengths) {
-            this.elementClass = elementClass;
-            this.lengths = lengths;
+        public void setConstructionArgs(StructuredArrayModel arrayModel) {
+            this.arrayModel = arrayModel;
         }
 
-        public Class getElementClass() {
-            return elementClass;
-        }
-
-
-        public long[] getLengths() {
-            return lengths;
+        public StructuredArrayModel getArrayModel() {
+            return arrayModel;
         }
 
         private boolean active = false;
-
-        Class elementClass;
-        private long[] lengths = null;
+        StructuredArrayModel arrayModel;
     }
-
 
     private static final ThreadLocal<ConstructorMagic> threadLocalConstructorMagic =
             new ThreadLocal<ConstructorMagic>() {
@@ -900,7 +422,6 @@ public abstract class StructuredArrayIntrinsifiableBase<T, A extends StructuredA
                     "StructuredArray<> must not be directly instantiated with a constructor. Use newInstance(...) instead.");
         }
     }
-
 
     //
     //
