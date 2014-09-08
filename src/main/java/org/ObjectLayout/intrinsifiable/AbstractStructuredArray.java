@@ -58,14 +58,14 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
         }
 
         // Calculate values used to populate relevant fields:
-        final long bodySize = (int) getInstanceSize(this.getClass());
+        final long bodySize = (int) Unsafes.getInstanceSize(this.getClass());
         final long length = arrayModel._getLength();
         final long elementSize = elementFootprint(arrayModel);
-        final long paddingSize = getPrePaddingInObjectFootprint(elementSize);
+        final long paddingSize = Unsafes.getPrePaddingInObjectFootprint(elementSize);
         final Class<T> elementClass = arrayModel._getElementClass();
 
         // initialize hidden fields:
-        initBodySize((int) getInstanceSize(this.getClass()));
+        initBodySize((int) Unsafes.getInstanceSize(this.getClass()));
         initLength(length);
         initElementSize(elementSize);
         initPaddingSize(paddingSize);
@@ -122,8 +122,8 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
         try {
             constructorMagic.setActive(true);
             arrayConstructor.setAccessible(true);
-            // TODO: use allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate room for array
-            // TODO: replace constructor.newInstance() call with constructObjectAtOffset() call:
+            // TODO: use Unsafes.allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate array
+            // TODO: replace constructor.newInstance() call with Unsafes.constructObjectAtOffset() call:
             return arrayConstructor.newInstance(args);
         } catch (InstantiationException ex) {
             throw new RuntimeException(ex);
@@ -141,10 +141,13 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
         if (arrayModel instanceof AbstractStructuredArrayModel) {
             AbstractStructuredArrayModel saModel = (AbstractStructuredArrayModel) arrayModel;
             footprint = (saModel._getSubArrayModel() == null) ?
-                    getInstanceFootprintWhenContained(saModel._getElementClass()) :
+                    Unsafes.getInstanceFootprintWhenContained(saModel._getElementClass()) :
                     arrayFootprint(saModel._getSubArrayModel(), true /* contained */);
         } else {
-            footprint = primitiveArrayFootprint(arrayModel, true /* contained */);
+            @SuppressWarnings("unchecked")
+            long primitiveArrayFootprint = PrimitiveArray.primitiveArrayFootprint(
+                    arrayModel._getArrayClass(), arrayModel._getLength(), true /* contained */);
+            footprint = primitiveArrayFootprint;
         }
 
         return footprint;
@@ -152,52 +155,14 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
 
     private static long arrayFootprint(AbstractArrayModel arrayModel, boolean contained) {
         long footprint = contained ?
-                getContainingObjectFootprintWhenContained(
+                Unsafes.getContainingObjectFootprintWhenContained(
                         arrayModel._getArrayClass(),
                         elementFootprint(arrayModel),
                         arrayModel._getLength()
                 ) :
-                getContainingObjectFootprint(
+                Unsafes.getContainingObjectFootprint(
                         arrayModel._getArrayClass(),
                         elementFootprint(arrayModel),
-                        arrayModel._getLength()
-                );
-        return footprint;
-    }
-
-    private static long primitiveArrayFootprint(AbstractArrayModel arrayModel, boolean contained) {
-        long primitiveElementSize;
-        Class arrayClass = arrayModel._getArrayClass();
-
-        if (AbstractPrimitiveByteArray.class.isAssignableFrom(arrayClass)) {
-            primitiveElementSize = 1;
-        } else if (AbstractPrimitiveCharArray.class.isAssignableFrom(arrayClass)) {
-            primitiveElementSize = 2;
-        } else if (AbstractPrimitiveDoubleArray.class.isAssignableFrom(arrayClass)) {
-            primitiveElementSize = 8;
-        } else if (AbstractPrimitiveFloatArray.class.isAssignableFrom(arrayClass)) {
-            primitiveElementSize = 4;
-        } else if (AbstractPrimitiveIntArray.class.isAssignableFrom(arrayClass)) {
-            primitiveElementSize = 4;
-        } else if (AbstractPrimitiveLongArray.class.isAssignableFrom(arrayClass)) {
-            primitiveElementSize = 8;
-        } else if (AbstractPrimitiveShortArray.class.isAssignableFrom(arrayClass)) {
-            primitiveElementSize = 2;
-        } else if (AbstractReferenceArray.class.isAssignableFrom(arrayClass)) {
-            primitiveElementSize = 8;
-        } else {
-            throw new IllegalArgumentException("Unrecognized primitive array class");
-        }
-
-        long footprint = contained ?
-                getContainingObjectFootprintWhenContained(
-                        arrayModel._getArrayClass(),
-                        primitiveElementSize,
-                        arrayModel._getLength()
-                ) :
-                getContainingObjectFootprint(
-                        arrayModel._getArrayClass(),
-                        primitiveElementSize,
                         arrayModel._getLength()
                 );
         return footprint;
@@ -522,9 +487,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
     }
 
     //
-    //
-    // Unsafe support:
-    //
+    // Local unsafe support
     //
 
     private static final Unsafe unsafe;
@@ -540,57 +503,5 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
         {
             throw new RuntimeException(e);
         }
-    }
-
-    static long getInstanceFootprintWhenContained(Class instanceClass) {
-        // TODO: implement with something like:
-        // return unsafe.getInstanceFootprintWhenContained(instanceClass);
-        return 0;
-    }
-
-    static long getInstanceSize(Class instanceClass) {
-        // TODO: implement with something like:
-        // return unsafe.getInstanceSize(instanceClass);
-        return 0;
-    }
-
-    static long getContainingObjectFootprintWhenContained(Class containerClass, long containedElementSize, long numberOfElements) {
-        // TODO: implement with something like:
-        // return unsafe.getContainingObjectFootprintWhenContained(this.getClass(), containedElementSize, numberOfElements);
-        return getInstanceFootprintWhenContained(containerClass) + (numberOfElements * containedElementSize);
-    }
-
-    static long getContainingObjectFootprint(Class containerClass, long containedElementSize, long numberOfElements) {
-        // TODO: implement with something like:
-        // return unsafe.getStructuredArrayFootPrint(this.getClass(), containedElementSize, numberOfElements);
-        return getInstanceSize(containerClass) + (numberOfElements * containedElementSize);
-    }
-
-    static long getPrePaddingInObjectFootprint(long objectFootprint) {
-        // objectSize is inclusive of any padding.
-        // TODO: implement with something like:
-        // return unsafe.getPrePaddingInObjectFootprint(objectSize);
-        return 0;
-    }
-
-    static Object allocateHeapForClass(Class instanceClass, long size) {
-        // TODO: implement with something like:
-        // return unsafe.allocateHeapForClass(instanceClass, size);
-        return null;
-    }
-
-    static Object deriveContainedObjectAtOffset(Object o, long offset) {
-        // TODO: implement with something like:
-        // return unsafe.deriveContainedObjectAtOffset(o, offset);
-        return null;
-    }
-
-    static void constructObjectAtOffset(Object containingObject, long offset, long objectPrePadding,
-                                        boolean isContained, boolean isContainer, long objectFootprint,
-                                        Constructor constructor, Object... args)
-            throws InstantiationException, IllegalAccessException, InvocationTargetException  {
-        // TODO: implement with something like:
-        // unsafe.constructObjectAtOffset(containingObject, offset, objectPrePadding, isContained,
-        //      isContainer, objectFootprint, constructor, args)
     }
  }

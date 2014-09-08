@@ -46,9 +46,13 @@ public abstract class PrimitiveArray extends AbstractArray {
             final Object... arrayConstructorArgs) {
         ConstructorMagic constructorMagic = getConstructorMagic();
         constructorMagic.setArrayConstructorArgs(length);
+        // Calculate array size in the heap:
+        long size = primitiveArrayFootprint(arrayConstructor.getDeclaringClass(), length, false /* not contained */);
         try {
             constructorMagic.setActive(true);
             arrayConstructor.setAccessible(true);
+            // TODO: use allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate room for array
+            // TODO: replace arrayConstructor.newInstance() call with constructObjectAtOffset() call:
             return arrayConstructor.newInstance(arrayConstructorArgs);
         } catch (InstantiationException ex) {
             throw new RuntimeException(ex);
@@ -59,6 +63,46 @@ public abstract class PrimitiveArray extends AbstractArray {
         } finally {
             constructorMagic.setActive(false);
         }
+    }
+
+    static long primitiveArrayFootprint(
+            Class<? extends PrimitiveArray> arrayClass,
+            long length,
+            boolean contained) {
+        long primitiveElementSize;
+
+        if (AbstractPrimitiveByteArray.class.isAssignableFrom(arrayClass)) {
+            primitiveElementSize = 1;
+        } else if (AbstractPrimitiveCharArray.class.isAssignableFrom(arrayClass)) {
+            primitiveElementSize = 2;
+        } else if (AbstractPrimitiveDoubleArray.class.isAssignableFrom(arrayClass)) {
+            primitiveElementSize = 8;
+        } else if (AbstractPrimitiveFloatArray.class.isAssignableFrom(arrayClass)) {
+            primitiveElementSize = 4;
+        } else if (AbstractPrimitiveIntArray.class.isAssignableFrom(arrayClass)) {
+            primitiveElementSize = 4;
+        } else if (AbstractPrimitiveLongArray.class.isAssignableFrom(arrayClass)) {
+            primitiveElementSize = 8;
+        } else if (AbstractPrimitiveShortArray.class.isAssignableFrom(arrayClass)) {
+            primitiveElementSize = 2;
+        } else if (AbstractReferenceArray.class.isAssignableFrom(arrayClass)) {
+            primitiveElementSize = 8;
+        } else {
+            throw new IllegalArgumentException("Unrecognized primitive array class");
+        }
+
+        long footprint = contained ?
+                Unsafes.getContainingObjectFootprintWhenContained(
+                        arrayClass,
+                        primitiveElementSize,
+                        length
+                ) :
+                Unsafes.getContainingObjectFootprint(
+                        arrayClass,
+                        primitiveElementSize,
+                        length
+                );
+        return footprint;
     }
 
     protected PrimitiveArray() {
