@@ -177,14 +177,21 @@ abstract class AbstractStructuredArray<T> {
     void constructElementAtIndex(
             final long index,
             final Constructor<T> constructor,
-            Object... args)
-            throws InstantiationException, IllegalAccessException, InvocationTargetException {
-        if ((index < 0) || (index > getLength())) {
-            throw new ArrayIndexOutOfBoundsException();
+            Object... args) {
+        try {
+            if ((index < 0) || (index > getLength())) {
+                throw new ArrayIndexOutOfBoundsException();
+            }
+            // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
+            T element = constructor.newInstance(args);
+            storeElementInLocalStorageAtIndex(element, index);
+        } catch (InstantiationException ex) {
+            throw new RuntimeException(ex);
+        } catch (IllegalAccessException ex) {
+            throw new RuntimeException(ex);
+        } catch (InvocationTargetException ex) {
+            throw new RuntimeException(ex);
         }
-        // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
-        T element = constructor.newInstance(args);
-        storeElementInLocalStorageAtIndex(element, index);
     }
 
     /**
@@ -198,8 +205,7 @@ abstract class AbstractStructuredArray<T> {
             final long index,
             AbstractPrimitiveArrayModel primitiveSubArrayModel,
             final Constructor<T> constructor,
-            final Object... args)
-            throws InstantiationException, IllegalAccessException, InvocationTargetException {
+            final Object... args) {
         int length = (int) primitiveSubArrayModel._getLength();
         @SuppressWarnings("unchecked")
         Constructor<? extends AbstractPrimitiveArray> c = (Constructor<? extends AbstractPrimitiveArray>) constructor;
@@ -220,8 +226,7 @@ abstract class AbstractStructuredArray<T> {
             long index,
             AbstractStructuredArrayModel subArrayModel,
             final Constructor<T> subArrayConstructor,
-            final Object... args)
-            throws InstantiationException, IllegalAccessException, InvocationTargetException {
+            final Object... args) {
         if ((index < 0) || (index > getLength())) {
             throw new ArrayIndexOutOfBoundsException();
         }
@@ -233,6 +238,44 @@ abstract class AbstractStructuredArray<T> {
             // TODO: replace subArrayConstructor.newInstance() with constructObjectAtOffset() call:
             T subArray = subArrayConstructor.newInstance(args);
             storeElementInLocalStorageAtIndex(subArray, index);
+        } catch (InstantiationException ex) {
+            throw new RuntimeException(ex);
+        } catch (IllegalAccessException ex) {
+            throw new RuntimeException(ex);
+        } catch (InvocationTargetException ex) {
+            throw new RuntimeException(ex);
+        } finally {
+            constructorMagic.setActive(false);
+        }
+    }
+
+    /**
+     * Construct a fresh StructuredArray intended to occupy a a given intrinsic field in the containing object,
+     * at the field described by the supplied intrinsicObjectModel, using the supplied constructor and arguments.
+     *
+     * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
+     * construction-in-place call on a previously allocated memory location associated with the given index.
+     */
+    static <T> void constructStructuredArrayWithin(
+            final Object containingObject,
+            final AbstractIntrinsicObjectModel<T> intrinsicObjectModel,
+            AbstractStructuredArrayModel subArrayModel,
+            final Constructor<T> subArrayConstructor,
+            final Object... args) {
+        ConstructorMagic constructorMagic = getConstructorMagic();
+        constructorMagic.setConstructionArgs(subArrayModel);
+        try {
+            constructorMagic.setActive(true);
+            subArrayConstructor.setAccessible(true);
+            // TODO: replace subArrayConstructor.newInstance() with constructObjectAtOffset() call:
+            T array = subArrayConstructor.newInstance(args);
+            intrinsicObjectModel.registerPendingIntrinsicObject(containingObject, array);
+        } catch (InstantiationException ex) {
+            throw new RuntimeException(ex);
+        } catch (IllegalAccessException ex) {
+            throw new RuntimeException(ex);
+        } catch (InvocationTargetException ex) {
+            throw new RuntimeException(ex);
         } finally {
             constructorMagic.setActive(false);
         }
