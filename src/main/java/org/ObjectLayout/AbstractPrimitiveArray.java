@@ -13,7 +13,7 @@ import java.lang.reflect.InvocationTargetException;
  * A abstract base class for subclassable primitive and reference arrays.
  */
 
-abstract class AbstractPrimitiveArray {
+public abstract class AbstractPrimitiveArray {
 
     private final long length;
 
