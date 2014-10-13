@@ -3,9 +3,8 @@
  * as explained at http://creativecommons.org/publicdomain/zero/1.0/
  */
 
-package org.ObjectLayout.intrinsifiable;
+package org.ObjectLayout;
 
-import org.ObjectLayout.PrimitiveArrayModel;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Constructor;
@@ -20,7 +19,7 @@ import java.lang.reflect.InvocationTargetException;
  * @param <T> the element type in the array
  */
 
-public abstract class AbstractStructuredArray<T> extends AbstractArray {
+abstract class AbstractStructuredArray<T> {
 
     // the existence of this field (not it's value) indicates that the class should be intrinsified:
     // (This allows the JVM to make this determination at load time, and not wait for initialization)
@@ -28,7 +27,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
 
     // Track initialization state:
     private boolean isInitialized = false;
-    public volatile boolean constructionCompleted = false;
+    volatile boolean constructionCompleted = false;
 
     //
     //
@@ -42,7 +41,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
      * in "Internal fields" section farther below.
      */
 
-    protected AbstractStructuredArray() {
+    AbstractStructuredArray() {
         checkConstructorMagic();
         ConstructorMagic constructorMagic = getConstructorMagic();
 
@@ -78,7 +77,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
         // hidden fields will fail from this point on.
         isInitialized = true;
 
-        // follow update of internal boolean indication with a modification of a public volatile
+        // follow update of internal boolean indication with a modification of a package-visible volatile
         // to ensure ordering (this way isInitialized does not have to be volatile and normal
         // accessor actions do not take the penalty of a volatile read barrier):
         constructionCompleted = true;
@@ -102,7 +101,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with one that
      * allocates room for the entire StructuredArray and all it's elements.
      */
-    protected static <S extends AbstractStructuredArray<T>, T> S instantiateStructuredArray(
+    static <S extends AbstractStructuredArray<T>, T> S instantiateStructuredArray(
             AbstractStructuredArrayModel<S, T> arrayModel, Constructor<S> arrayConstructor, Object... args) {
 
         // For implementations that need the array class and the element class,
@@ -136,24 +135,24 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
         }
     }
 
-    private static long elementFootprint(AbstractArrayModel arrayModel) {
+    private static long elementFootprint(AbstractStructuredArrayModel arrayModel) {
         long footprint;
-        if (arrayModel instanceof AbstractStructuredArrayModel) {
-            AbstractStructuredArrayModel saModel = (AbstractStructuredArrayModel) arrayModel;
-            footprint = (saModel._getSubArrayModel() == null) ?
-                    Unsafes.getInstanceFootprintWhenContained(saModel._getElementClass()) :
-                    arrayFootprint(saModel._getSubArrayModel(), true /* contained */);
-        } else {
+        if (arrayModel._getStructuredSubArrayModel() != null) {
+            footprint = arrayFootprint(arrayModel._getStructuredSubArrayModel(), true /* contained */);
+        } else if (arrayModel._getPrimitiveSubArrayModel() != null) {
+            AbstractPrimitiveArrayModel subArrayModel = arrayModel._getPrimitiveSubArrayModel();
             @SuppressWarnings("unchecked")
-            long primitiveArrayFootprint = PrimitiveArray.primitiveArrayFootprint(
-                    arrayModel._getArrayClass(), arrayModel._getLength(), true /* contained */);
-            footprint = primitiveArrayFootprint;
+            Class<? extends AbstractPrimitiveArray> subArrayClass = subArrayModel._getArrayClass();
+            footprint = AbstractPrimitiveArray.primitiveArrayFootprint(
+                    subArrayClass, arrayModel._getLength(), true /* contained */);
+        } else {
+            // Regular element
+            footprint = Unsafes.getInstanceFootprintWhenContained(arrayModel._getElementClass());
         }
-
         return footprint;
     }
 
-    private static long arrayFootprint(AbstractArrayModel arrayModel, boolean contained) {
+    private static long arrayFootprint(AbstractStructuredArrayModel arrayModel, boolean contained) {
         long footprint = contained ?
                 Unsafes.getContainingObjectFootprintWhenContained(
                         arrayModel._getArrayClass(),
@@ -175,7 +174,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
      * construction-in-place call on a previously allocated memory location associated with the given index.
      */
-    protected void constructElementAtIndex(
+    void constructElementAtIndex(
             final long index,
             final Constructor<T> constructor,
             Object... args)
@@ -195,18 +194,18 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
      * construction-in-place call on a previously allocated memory location associated with the given index.
      */
-    protected void constructPrimitiveSubArrayAtIndex(
+    void constructPrimitiveSubArrayAtIndex(
             final long index,
-            AbstractArrayModel primitiveSubArrayModel,
+            AbstractPrimitiveArrayModel primitiveSubArrayModel,
             final Constructor<T> constructor,
             final Object... args)
             throws InstantiationException, IllegalAccessException, InvocationTargetException {
         int length = (int) primitiveSubArrayModel._getLength();
         @SuppressWarnings("unchecked")
-        Constructor<? extends PrimitiveArray> c = (Constructor<? extends PrimitiveArray>) constructor;
+        Constructor<? extends AbstractPrimitiveArray> c = (Constructor<? extends AbstractPrimitiveArray>) constructor;
         // TODO: replace PrimitiveArray.newInstance() with constructObjectAtOffset() call:
         @SuppressWarnings("unchecked")
-        T element = (T) PrimitiveArray.newInstance(length, c, args);
+        T element = (T) AbstractPrimitiveArray._newInstance(length, c, args);
         storeElementInLocalStorageAtIndex(element, index);
     }
 
@@ -217,7 +216,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
      * construction-in-place call on a previously allocated memory location associated with the given index.
      */
-    protected void constructSubArrayAtIndex(
+    void constructSubArrayAtIndex(
             long index,
             AbstractStructuredArrayModel subArrayModel,
             final Constructor<T> subArrayConstructor,
@@ -247,7 +246,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    protected T get(final int index)
+    T get(final int index)
             throws IllegalArgumentException {
         if ((index < 0) || (index > getLength())) {
             throw new ArrayIndexOutOfBoundsException();
@@ -267,7 +266,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
      * faster access form (e.g. they may be able to derive the element reference directly from the
      * structuredArray reference without requiring a de-reference).
      */
-    protected T get(final long index)
+    T get(final long index)
             throws IllegalArgumentException {
         if ((index < 0) || (index > getLength())) {
             throw new ArrayIndexOutOfBoundsException();
@@ -296,7 +295,7 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
     //
 
     @SuppressWarnings("unchecked")
-    protected Class<T> getElementClass() {
+    Class<T> getElementClass() {
         return (Class<T>) unsafe.getObject(this, elementClassOffset);
     }
 
@@ -456,11 +455,11 @@ public abstract class AbstractStructuredArray<T> extends AbstractArray {
             this.active = active;
         }
 
-        public void setConstructionArgs(AbstractStructuredArrayModel arrayModel) {
+        private void setConstructionArgs(AbstractStructuredArrayModel arrayModel) {
             this.arrayModel = arrayModel;
         }
 
-        public AbstractStructuredArrayModel getArrayModel() {
+        private AbstractStructuredArrayModel getArrayModel() {
             return arrayModel;
         }
 

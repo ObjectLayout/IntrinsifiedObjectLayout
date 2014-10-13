@@ -3,7 +3,7 @@
  * as explained at http://creativecommons.org/publicdomain/zero/1.0/
  */
 
-package org.ObjectLayout.intrinsifiable;
+package org.ObjectLayout;
 
 import sun.misc.Unsafe;
 
@@ -17,7 +17,7 @@ import java.lang.reflect.InvocationTargetException;
  *
  */
 
-public abstract class Unsafes {
+abstract class Unsafes {
 
     private static final Unsafe unsafe;
     static
