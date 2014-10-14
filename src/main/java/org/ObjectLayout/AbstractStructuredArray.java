@@ -179,7 +179,7 @@ abstract class AbstractStructuredArray<T> {
             final Constructor<T> constructor,
             Object... args) {
         try {
-            if ((index < 0) || (index > getLength())) {
+            if ((index < 0) || (index >= getLength())) {
                 throw new ArrayIndexOutOfBoundsException();
             }
             // TODO: replace constructor.newInstance() with constructObjectAtOffset() call:
@@ -206,6 +206,9 @@ abstract class AbstractStructuredArray<T> {
             AbstractPrimitiveArrayModel primitiveSubArrayModel,
             final Constructor<T> constructor,
             final Object... args) {
+        if ((index < 0) || (index >= getLength())) {
+            throw new ArrayIndexOutOfBoundsException();
+        }
         int length = (int) primitiveSubArrayModel._getLength();
         @SuppressWarnings("unchecked")
         Constructor<? extends AbstractPrimitiveArray> c = (Constructor<? extends AbstractPrimitiveArray>) constructor;
@@ -227,7 +230,7 @@ abstract class AbstractStructuredArray<T> {
             AbstractStructuredArrayModel subArrayModel,
             final Constructor<T> subArrayConstructor,
             final Object... args) {
-        if ((index < 0) || (index > getLength())) {
+        if ((index < 0) || (index >= getLength())) {
             throw new ArrayIndexOutOfBoundsException();
         }
         ConstructorMagic constructorMagic = getConstructorMagic();
@@ -291,7 +294,7 @@ abstract class AbstractStructuredArray<T> {
      */
     T get(final int index)
             throws IllegalArgumentException {
-        if ((index < 0) || (index > getLength())) {
+        if ((index < 0) || (index >= getLength())) {
             throw new ArrayIndexOutOfBoundsException();
         }
 
@@ -311,7 +314,7 @@ abstract class AbstractStructuredArray<T> {
      */
     T get(final long index)
             throws IllegalArgumentException {
-        if ((index < 0) || (index > getLength())) {
+        if ((index < 0) || (index >= getLength())) {
             throw new ArrayIndexOutOfBoundsException();
         }
 
