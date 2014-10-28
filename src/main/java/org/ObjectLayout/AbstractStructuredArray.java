@@ -259,7 +259,7 @@ abstract class AbstractStructuredArray<T> {
      * OPTIMIZATION NOTE: Optimized JDK implementations may replace this implementation with a
      * construction-in-place call on a previously allocated memory location associated with the given index.
      */
-    static <T> void constructStructuredArrayWithin(
+    static <T> T constructStructuredArrayWithin(
             final Object containingObject,
             final AbstractIntrinsicObjectModel<T> intrinsicObjectModel,
             AbstractStructuredArrayModel subArrayModel,
@@ -272,7 +272,8 @@ abstract class AbstractStructuredArray<T> {
             subArrayConstructor.setAccessible(true);
             // TODO: replace subArrayConstructor.newInstance() with constructObjectAtOffset() call:
             T array = subArrayConstructor.newInstance(args);
-            intrinsicObjectModel.registerPendingIntrinsicObject(containingObject, array);
+            intrinsicObjectModel.directlyInitializeTargetField(containingObject, array);
+            return array;
         } catch (InstantiationException ex) {
             throw new RuntimeException(ex);
         } catch (IllegalAccessException ex) {
