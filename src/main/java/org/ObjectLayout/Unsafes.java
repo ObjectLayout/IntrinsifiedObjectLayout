@@ -65,9 +65,26 @@ abstract class Unsafes {
         return 0;
     }
 
-    static Object allocateHeapForClass(Class instanceClass, long size) {
+    static Object allocateHeapForFixedSizeClass(Class instanceClass) {
         // TODO: implement with something like:
-        // return unsafe.allocateHeapForClass(instanceClass, size);
+        // return unsafe.allocateHeapFixedSizeClass(instanceClass);
+        return null;
+    }
+
+    static Object allocateHeapForElementArrayClass(
+            Class instanceClass,
+            long[] elementCounts,
+            Class[] elementClasses) {
+        // TODO: implement with something like:
+        // return unsafe.allocateHeapForElementArrayClass(instanceClass, elementCounts, elementClasses);
+        return null;
+    }
+
+    static Object allocateHeapForPrimitiveArrayClass(
+            Class instanceClass,
+            long elementCount) {
+        // TODO: implement with something like:
+        // return unsafe.allocateHeapForPrimitiveArrayClass(instanceClass, elementCount);
         return null;
     }
 

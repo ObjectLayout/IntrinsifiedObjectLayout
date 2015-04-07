@@ -121,7 +121,8 @@ abstract class AbstractStructuredArray<T> {
         try {
             constructorMagic.setActive(true);
             arrayConstructor.setAccessible(true);
-            // TODO: use Unsafes.allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate array
+            // TODO: use allocateHeapForElementArrayClass(arrayConstructor.getDeclaringClass(),
+            //     instanceClasses, elementCounts) to allocate array.
             // TODO: replace constructor.newInstance() call with Unsafes.constructObjectAtOffset() call:
             return arrayConstructor.newInstance(args);
         } catch (InstantiationException ex) {

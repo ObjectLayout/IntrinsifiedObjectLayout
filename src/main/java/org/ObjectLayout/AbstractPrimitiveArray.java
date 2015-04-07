@@ -64,7 +64,7 @@ public abstract class AbstractPrimitiveArray {
         try {
             constructorMagic.setActive(true);
             arrayConstructor.setAccessible(true);
-            // TODO: use allocateHeapForClass(arrayConstructor.getDeclaringClass(), size) to allocate room for array
+            // TODO: use allocateHeapForPrimitiveArrayClass(arrayConstructor.getDeclaringClass(), length) to allocate room for array
             // TODO: replace arrayConstructor.newInstance() call with constructObjectAtOffset() call:
             return arrayConstructor.newInstance(arrayConstructorArgs);
         } catch (InstantiationException ex) {
